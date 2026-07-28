@@ -1,0 +1,23 @@
+# 含有效 token，切勿提交
+.env
+ALERT_TOKEN_EXPIRED
+.sync.lock
+
+# 抓包文件含 token 与账号手机号/邮箱等个人信息
+*.har
+
+# 数据与产物
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+export/
+logs/
+
+# 页面存档
+*_files/
+EDI*.html
+
+__pycache__/
+*.pyc
+
+.claude/
