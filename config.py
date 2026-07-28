@@ -13,7 +13,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# 浏览器 UA，与 HAR 中一致（服务端未做 UA 校验，保持正常值即可）
+# 浏览器 UA（服务端未做 UA 校验，保持正常值即可）
 DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"

@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import logging
 import logging.handlers
 import os
@@ -37,6 +38,12 @@ META_EMPTY_COMPARE_EXCLUDED = "empty_compare_excluded"   # 1: 窗口会滤掉未
 META_EMPTY_WINDOW_OK = "empty_window_ok"        # 1: compareTime 传空可用（不带时间过滤）
 META_PROBE_AT = "probe_at"
 META_BACKFILL_PAGE = "backfill_page_done"
+
+# token 计龄（token 是服务端会话，JWT 里没有 exp，客户端解不出过期时间，
+# 站点也没有续签接口——只能用"上一个 token 活了多久"做粗略的提前预警）
+META_TOKEN_HASH = "token_hash"
+META_TOKEN_FIRST_USED = "token_first_used_at"
+META_TOKEN_PREV_DAYS = "token_prev_lifetime_days"
 
 
 # --------------------------------------------------------------------- 基础设施
@@ -128,6 +135,56 @@ def clear_alert(cfg: Config) -> None:
         log.info("token 已恢复正常，清除告警文件 %s", cfg.alert_file.name)
 
 
+def track_token(store: Store, cfg: Config, now: datetime) -> None:
+    """token 换新时记下启用时间，并结算上一个 token 的寿命（天）。"""
+    digest = hashlib.sha256(cfg.token.encode("utf-8")).hexdigest()[:16]
+    if store.meta_get(META_TOKEN_HASH) == digest:
+        return
+    first = store.meta_get(META_TOKEN_FIRST_USED)
+    if store.meta_get(META_TOKEN_HASH) and first:
+        try:
+            days = (now - datetime.strptime(first, "%Y-%m-%d %H:%M:%S")).days
+            store.meta_set(META_TOKEN_PREV_DAYS, str(max(days, 0)))
+        except ValueError:
+            pass
+    store.meta_set(META_TOKEN_HASH, digest)
+    store.meta_set(META_TOKEN_FIRST_USED, now.strftime("%Y-%m-%d %H:%M:%S"))
+    log.info("检测到新 token，开始记录使用时长")
+
+
+def token_age_days(store: Store, now: datetime) -> int | None:
+    first = store.meta_get(META_TOKEN_FIRST_USED)
+    if not first:
+        return None
+    try:
+        return max((now - datetime.strptime(first, "%Y-%m-%d %H:%M:%S")).days, 0)
+    except ValueError:
+        return None
+
+
+def warn_token_age(store: Store, now: datetime) -> None:
+    """当前 token 用龄接近上一个 token 的寿命时，提前一天提醒更换。"""
+    age = token_age_days(store, now)
+    prev = store.meta_get(META_TOKEN_PREV_DAYS)
+    if age is None or not prev:
+        return
+    prev_days = int(prev)
+    if prev_days >= 2 and age >= prev_days - 1:
+        log.warning(
+            "当前 token 已使用 %d 天，上一个 token 寿命约 %d 天，建议尽快按 README 步骤更换，避免采集中断",
+            age, prev_days,
+        )
+
+
+def preflight(cfg: Config, client: NpediClient, store: Store, now: datetime) -> None:
+    """每轮开始的公共前置：token 计龄 + 探活。探活失败会在采集开始前就报出失效。"""
+    track_token(store, cfg, now)
+    warn_token_age(store, now)
+    if cfg.auth_probe:
+        client.get_info()
+        clear_alert(cfg)
+
+
 def _merge(target: dict[str, int], delta: dict[str, int]) -> dict[str, int]:
     for key, value in delta.items():
         target[key] = target.get(key, 0) + value
@@ -190,7 +247,7 @@ def do_probe(cfg: Config, client: NpediClient, store: Store, now: datetime) -> d
 
     # --- 假设 1：unvessel/voyage 留空是否返回跨航次的全量明细 ---
     # 判据用 total 而不是"第 1 页出现几个航次"：单个航次就可能有几百个箱子
-    # （HAR 中 UN9604122/071E 一个航次 684 个），第 1 页全是同一航次很正常，
+    # （实测 UN9604122/071E 一个航次 684 个），第 1 页全是同一航次很正常，
     # 只看第 1 页会把成立的假设误判为不成立，白白退回 800+ 次请求的降级路径。
     window = fmt_compare_window(now - timedelta(days=7), now + timedelta(hours=cfg.future_margin_hours))
     blank_ok = False
@@ -307,9 +364,7 @@ def run_backfill(cfg: Config, args) -> int:
         stats: dict[str, int] = {}
         try:
             # 探活放在 start_run 之后：token 失效的那一轮同样要在 sync_runs 里留痕
-            if cfg.auth_probe:
-                client.get_info()
-                clear_alert(cfg)
+            preflight(cfg, client, store, now)
             sync_voyage_catalog(client, store, now)
             strategy = ensure_strategy(cfg, client, store, now)
             window = no_window_or_wide(store, now)
@@ -390,14 +445,22 @@ def run_incremental(cfg: Config, args, kind: str = "incremental") -> int:
         run_id = store.start_run(kind, window.split(",")[0], wm_to)
         log.info("%s 开始：compareTime 窗口 = %s", kind, window)
         stats: dict[str, int] = {}
+        is_replay = kind == "replay"
         try:
             # 探活放在 start_run 之后：token 失效的那一轮同样要在 sync_runs 里留痕
-            if cfg.auth_probe:
-                client.get_info()
-                clear_alert(cfg)
-            sync_voyage_catalog(client, store, now)
+            preflight(cfg, client, store, now)
+            # replay 只按窗口重跑：不同步航次目录、不回填新航次，除入库外不改任何状态
+            if not is_replay:
+                sync_voyage_catalog(client, store, now)
             strategy = ensure_strategy(cfg, client, store, now)
             fallback = needs_empty_compare_fallback(cfg, store)
+
+            # 先确定本轮要全量回填哪些新航次（§4.2 步骤 3，单轮有上限保护）：
+            # 这些航次稍后全量抓，per_voyage 的窗口查询对它们是多余请求，直接跳过
+            pending = [] if is_replay else store.voyages_pending_backfill(
+                limit=cfg.max_new_voyage_backfill_per_run
+            )
+            pending_keys = {(v["unvessel"], v["voyage"]) for v in pending}
 
             if strategy == "all_in_one":
                 _merge(stats, fetch_into_store(client, store, run_id,
@@ -414,9 +477,13 @@ def run_incremental(cfg: Config, args, kind: str = "incremental") -> int:
                     future_days=cfg.active_future_days,
                     unknown_close_days=cfg.active_unknown_close_days,
                 )
-                log.info("按航次增量：活跃航次 %d 个（全量 %d 个）",
-                         len(active), store.counts()["voyages"])
+                skip = sum(1 for v in active if (v["unvessel"], v["voyage"]) in pending_keys)
+                log.info("按航次增量：活跃航次 %d 个（全量 %d 个）%s",
+                         len(active), store.counts()["voyages"],
+                         f"，其中 {skip} 个待回填航次跳过窗口查询" if skip else "")
                 for idx, voy in enumerate(active, 1):
+                    if (voy["unvessel"], voy["voyage"]) in pending_keys:
+                        continue
                     label = f"[{idx}/{len(active)}] {voy['unvessel']}/{voy['voyage']}"
                     _merge(stats, fetch_into_store(
                         client, store, run_id,
@@ -430,8 +497,6 @@ def run_incremental(cfg: Config, args, kind: str = "incremental") -> int:
                             compare_time="", compare_flag="N", label=label + " 兜底",
                         ))
 
-            # 新航次顺带回填（§4.2 步骤 3），单轮请求量有上限保护
-            pending = store.voyages_pending_backfill(limit=cfg.max_new_voyage_backfill_per_run)
             if pending:
                 log.info("发现 %d 个未回填航次，本轮顺带回填", len(pending))
                 full = no_window_or_wide(store, now)
@@ -465,9 +530,7 @@ def run_reconcile(cfg: Config, args) -> int:
         stats: dict[str, int] = {}
         try:
             # 探活放在 start_run 之后：token 失效的那一轮同样要在 sync_runs 里留痕
-            if cfg.auth_probe:
-                client.get_info()
-                clear_alert(cfg)
+            preflight(cfg, client, store, now)
             sync_voyage_catalog(client, store, now)
             ensure_strategy(cfg, client, store, now)
             window = no_window_or_wide(store, now)
@@ -518,9 +581,7 @@ def _report(cfg: Config, store: Store, run_id: int, client: NpediClient,
 def cmd_probe(cfg: Config, args) -> int:
     now = datetime.now()
     with Store(cfg.db_path) as store, NpediClient(cfg) as client:
-        if cfg.auth_probe:
-            client.get_info()
-            clear_alert(cfg)
+        preflight(cfg, client, store, now)
         result = do_probe(cfg, client, store, now)
     print("\n=== 探测结论（已写入 meta 表，后续运行自动采用）===")
     print(f"采集策略           : {result['strategy']}"
@@ -552,6 +613,14 @@ def cmd_status(cfg: Config, args) -> int:
         print(f"采集策略        : {store.meta_get(META_STRATEGY) or '未探测（首次运行会自动 probe）'}")
         print(f"探测时间        : {store.meta_get(META_PROBE_AT) or '-'}")
         print(f"最近成功水位线  : {store.last_successful_watermark() or '-'}")
+        first_used = store.meta_get(META_TOKEN_FIRST_USED)
+        if first_used:
+            age = token_age_days(store, datetime.now())
+            prev = store.meta_get(META_TOKEN_PREV_DAYS)
+            print(f"token 启用时间  : {first_used}（已用 {age} 天"
+                  + (f"，上一个 token 寿命约 {prev} 天" if prev else "") + "）")
+        else:
+            print("token 启用时间  : 未记录（跑一轮任意联网命令后开始计龄）")
         if cfg.alert_file.exists():
             print(f"\n!! token 告警未清除：{cfg.alert_file}")
         print("\n=== 最近运行 ===")

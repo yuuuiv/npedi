@@ -17,7 +17,7 @@ from typing import Any, Iterable, Sequence
 
 log = logging.getLogger("npedi.store")
 
-# 明细字段，取自接口返回的原始键名（HAR 实测）。顺序即建表 / CSV 列顺序。
+# 明细字段，取自接口返回的原始键名。顺序即建表 / CSV 列顺序。
 CONTAINER_FIELDS: tuple[str, ...] = (
     "id",
     "containerno",
@@ -236,7 +236,10 @@ class Store:
             (kind, now_iso(), wm_from, wm_to),
         )
         self.conn.commit()
-        return int(cur.lastrowid)
+        run_id = cur.lastrowid
+        if run_id is None:  # INSERT 之后必然有 rowid，兜住只是为了不把 None 传下去
+            raise RuntimeError("写入 sync_runs 后没拿到 run_id，本轮无法记账")
+        return run_id
 
     def finish_run(
         self,

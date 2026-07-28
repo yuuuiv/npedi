@@ -101,6 +101,9 @@ GET /onesite-api/npp/search/integrated
 1. **`unvessel`/`voyage` 留空是否返回全部航次的明细**（UI 表单允许留空）。
    若成立，增量更新每轮只需 `1 + ceil(变化行数/200)` 次请求，是最省流量的路径，
    整个架构优先采用；若不成立，退回按航次循环（见 §4 降级策略）。
+   **判定方法用 `total` 对比，不要数第 1 页里出现了几个航次**：单个航次就可能有
+   几百个箱子（实测 UN9604122/071E 有 684 个），留空查询的第 1 页 200 行全部
+   落在同一航次是正常现象，据此判定假设不成立会白白退回请求量大几百倍的降级路径。
 2. **`compareTime` 窗口过滤的语义**：确认它按行的 `compareTime` 字段过滤，
    且窗口可放宽（如 30 天）。同时确认 `compareTime` 为空的行（未比对的新箱）
    在窗口过滤下是否返回——若被过滤掉，增量轮必须补一个"空 compareTime"的
@@ -231,6 +234,8 @@ REQUEST_DELAY_MS=500-1000
 DB_PATH=./npedi.sqlite
 EXPORT_DIR=./export                # CSV 输出目录（见 §5.5）
 ALERT_FILE=./ALERT_TOKEN_EXPIRED   # token 失效时创建此文件并写明时间
+AUTH_PROBE=true                    # 每轮开采前探活一次，验 token（见 §8）
+CSV_TIMESTAMP_FORMAT=              # 空=转成可读写法；raw=保留接口原始 14 位数字
 ```
 
 `COMPARE_WINDOW_MANUAL` 即满足"可调整比较时间的选择"：命令行/配置指定任意窗口
@@ -246,5 +251,8 @@ ALERT_FILE=./ALERT_TOKEN_EXPIRED   # token 失效时创建此文件并写明时�
 ## 8. 明确不做的事
 
 - 不请求任何 HTML/JS/CSS/图片静态资源。
-- 不调 `searchcountAll`、`getInfo`、`getRouters`、`allMenu` 等页面辅助接口。
+- 不调 `searchcountAll`、`getRouters`、`allMenu` 等页面辅助接口。
+- `getInfo` 是例外：实现改为每轮开采前调一次探活，用途见 §1 的 token 验证。
+  理由是在第一个采集请求发出去之前就报出 token 失效，比抓到一半断掉好排查；
+  代价是每轮多一次请求。不需要时设 `AUTH_PROBE=false` 关掉。
 - 不并发、不调大 pageSize、不高频轮询 —— 三次/天 + 温和串行已满足需求。

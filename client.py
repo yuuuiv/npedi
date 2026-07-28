@@ -77,7 +77,7 @@ class NpediClient:
                 resp = self._http.get(path, params=params)
                 self._last_request_at = time.monotonic()
                 self.request_count += 1
-            except (httpx.TransportError, httpx.TimeoutException) as exc:
+            except httpx.TransportError as exc:  # 含超时：TimeoutException 是其子类
                 if attempt > self.cfg.max_retries:
                     raise ApiError(f"{path} 网络错误，重试 {self.cfg.max_retries} 次后仍失败: {exc}") from exc
                 backoff = 3 ** (attempt - 1)
@@ -166,7 +166,8 @@ class NpediClient:
 
         分页以 total 为准（样本中 totalPages 恒为 0，不可信），
         并在返回空页 / 已取满 total 时提前结束。
-        start_page > 1 用于断点续爬，跳过的页不会发出请求。
+        start_page > 1 用于断点续爬，跳过的页不会发出请求；
+        已取行数按"之前各页均为满页"估算，仅对逐页完整抓完再中断的场景（backfill --resume）成立。
         """
         page = max(1, start_page)
         fetched = (page - 1) * (self.cfg.page_size)
