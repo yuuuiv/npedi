@@ -101,6 +101,12 @@ class Config:
     csv_timestamp_format: str = "iso"  # iso: 20260727103201 → 2026-07-27 10:32:01；raw: 原样
     csv_keep_change_files: int = 90    # 保留最近多少个 changes_*.csv，0 表示不清理
 
+    # --- 日志 ---
+    log_keep_run_files: int = 90       # 保留最近多少个单轮日志 logs/runs/*.log，0 表示不清理
+
+    # 运行期填充：本轮的单轮日志文件名，写进 sync_runs.log_file 供 status 反查
+    run_log_name: str = ""
+
     @property
     def api_base(self) -> str:
         return self.base_url.rstrip("/") + "/onesite-api"
@@ -169,5 +175,6 @@ def load_config(env_path: Path | None = None) -> Config:
         empty_compare_fallback=_get(env, "EMPTY_COMPARE_FALLBACK", "auto").lower(),
         csv_timestamp_format=_get(env, "CSV_TIMESTAMP_FORMAT", "iso").lower(),
         csv_keep_change_files=_int("CSV_KEEP_CHANGE_FILES", 90),
+        log_keep_run_files=_int("LOG_KEEP_RUN_FILES", 90),
     )
     return cfg

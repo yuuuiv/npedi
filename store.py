@@ -62,6 +62,12 @@ CONTAINER_FIELDS: tuple[str, ...] = (
 # 参与变更检测的字段：除主键外的全部业务字段 + 未知新增字段（extra_json）
 HASH_FIELDS: tuple[str, ...] = tuple(f for f in CONTAINER_FIELDS if f != "id")
 
+# 只有这些字段变化时，算"系统又比对了一遍"，不算业务变更。
+# compareTime 是平台每次比对都会重刷的时间戳：实测一轮增量的 58106 条变更里，
+# 50592 条（87%）除了它什么都没动。把这些记成 updated，会让真正的 7514 条变更被淹掉，
+# 也会让 changes_*.csv 膨胀近十倍。
+TOUCH_ONLY_FIELDS: frozenset[str] = frozenset({"compareTime"})
+
 # 形如 20260727103201 的时间戳字段，CSV 导出时可转成 ISO
 TIMESTAMP_FIELDS: tuple[str, ...] = (
     "compareTime", "sendTime", "receivetime", "rktime", "loadtime",
@@ -130,9 +136,11 @@ CREATE TABLE IF NOT EXISTS sync_runs (
     rows_seen      INTEGER DEFAULT 0,
     rows_new       INTEGER DEFAULT 0,
     rows_updated   INTEGER DEFAULT 0,
+    rows_touched   INTEGER DEFAULT 0,     -- 只有 compareTime 变的空转行
     rows_unchanged INTEGER DEFAULT 0,
     status      TEXT NOT NULL,            -- running | ok | auth_expired | failed
-    error       TEXT
+    error       TEXT,
+    log_file    TEXT                      -- 本轮的单轮日志文件名（logs/runs/ 下）
 );
 
 -- 键值元数据（probe 结论、策略选择等）
@@ -202,7 +210,20 @@ class Store:
         self.conn = sqlite3.connect(self.path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """给已存在的库补上后加的列。
+
+        CREATE TABLE IF NOT EXISTS 不会给旧表加列，而重建 containers 表在几十万行的库上
+        代价太大，所以后加的列一律走 ALTER TABLE ADD COLUMN（SQLite 里是常数时间）。
+        """
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(sync_runs)")}
+        for name, ddl in (("log_file", "TEXT"), ("rows_touched", "INTEGER DEFAULT 0")):
+            if name not in cols:
+                self.conn.execute(f"ALTER TABLE sync_runs ADD COLUMN {name} {ddl}")
+                log.info("已为 sync_runs 补上 %s 列", name)
 
     def close(self) -> None:
         self.conn.close()
@@ -229,11 +250,12 @@ class Store:
 
     # ------------------------------------------------------------- runs
 
-    def start_run(self, kind: str, wm_from: str | None, wm_to: str | None) -> int:
+    def start_run(self, kind: str, wm_from: str | None, wm_to: str | None,
+                  log_file: str = "") -> int:
         cur = self.conn.execute(
-            "INSERT INTO sync_runs(kind, started_at, watermark_from, watermark_to, status) "
-            "VALUES(?,?,?,?, 'running')",
-            (kind, now_iso(), wm_from, wm_to),
+            "INSERT INTO sync_runs(kind, started_at, watermark_from, watermark_to, status, log_file) "
+            "VALUES(?,?,?,?, 'running', ?)",
+            (kind, now_iso(), wm_from, wm_to, log_file or None),
         )
         self.conn.commit()
         run_id = cur.lastrowid
@@ -253,11 +275,12 @@ class Store:
         stats = stats or {}
         self.conn.execute(
             "UPDATE sync_runs SET finished_at=?, status=?, requests_made=?, "
-            "rows_seen=?, rows_new=?, rows_updated=?, rows_unchanged=?, error=? WHERE run_id=?",
+            "rows_seen=?, rows_new=?, rows_updated=?, rows_touched=?, rows_unchanged=?, "
+            "error=? WHERE run_id=?",
             (
                 now_iso(), status, requests_made,
                 stats.get("seen", 0), stats.get("new", 0),
-                stats.get("updated", 0), stats.get("unchanged", 0),
+                stats.get("updated", 0), stats.get("touched", 0), stats.get("unchanged", 0),
                 error, run_id,
             ),
         )
@@ -381,8 +404,14 @@ class Store:
     # ------------------------------------------------------------- containers
 
     def upsert_containers(self, rows: Iterable[dict], run_id: int) -> dict[str, int]:
-        """按 id upsert；hash 未变的行完全跳过。返回 seen/new/updated/unchanged/skipped 计数。"""
-        stats = {"seen": 0, "new": 0, "updated": 0, "unchanged": 0, "skipped": 0}
+        """按 id upsert，返回 seen/new/updated/touched/unchanged/skipped 计数。
+
+        三条路径，区别在于"这次变化值不值得记一笔"：
+          unchanged  hash 一样 —— 完全不碰库
+          touched    只有 TOUCH_ONLY_FIELDS 变了 —— 写新值保持数据新鲜，但不记历史、不进变更 CSV
+          updated    有业务字段变了 —— 更新 + 记字段级历史 + 进变更 CSV
+        """
+        stats = {"seen": 0, "new": 0, "updated": 0, "touched": 0, "unchanged": 0, "skipped": 0}
         ts = now_iso()
         touched_voyages: set[tuple[str, str]] = set()
         cur = self.conn.cursor()
@@ -430,20 +459,31 @@ class Store:
                 if extra_json != (old["extra_json"] or ""):
                     diff["__extra__"] = [old["extra_json"], extra_json]
                 assignments = ", ".join(f'"{f}"=?' for f in HASH_FIELDS)
-                cur.execute(
-                    f"UPDATE containers SET {assignments}, extra_json=?, row_hash=?, updated_at=? WHERE id=?",
-                    (*(values[f] for f in HASH_FIELDS), extra_json, row_hash, ts, int(rid)),
-                )
-                cur.execute(
-                    "INSERT INTO container_history(id, run_id, changed_at, changed_fields) VALUES(?,?,?,?)",
-                    (int(rid), run_id, ts, json.dumps(diff, ensure_ascii=False)),
-                )
-                cur.execute(
-                    "INSERT INTO run_changes(run_id, id, change_type) VALUES(?,?, 'updated') "
-                    "ON CONFLICT(run_id, id) DO NOTHING",
-                    (run_id, int(rid)),
-                )
-                stats["updated"] += 1
+                if set(diff) - TOUCH_ONLY_FIELDS:
+                    cur.execute(
+                        f"UPDATE containers SET {assignments}, extra_json=?, row_hash=?, updated_at=? "
+                        "WHERE id=?",
+                        (*(values[f] for f in HASH_FIELDS), extra_json, row_hash, ts, int(rid)),
+                    )
+                    cur.execute(
+                        "INSERT INTO container_history(id, run_id, changed_at, changed_fields) "
+                        "VALUES(?,?,?,?)",
+                        (int(rid), run_id, ts, json.dumps(diff, ensure_ascii=False)),
+                    )
+                    cur.execute(
+                        "INSERT INTO run_changes(run_id, id, change_type) VALUES(?,?, 'updated') "
+                        "ON CONFLICT(run_id, id) DO NOTHING",
+                        (run_id, int(rid)),
+                    )
+                    stats["updated"] += 1
+                else:
+                    # 系统重新比对了一遍，业务内容没动。写入新值让 compareTime 保持最新，
+                    # 但不动 updated_at —— 它表示"最后一次真变更"，不该被空转推着走。
+                    cur.execute(
+                        f"UPDATE containers SET {assignments}, extra_json=?, row_hash=? WHERE id=?",
+                        (*(values[f] for f in HASH_FIELDS), extra_json, row_hash, int(rid)),
+                    )
+                    stats["touched"] += 1
 
             voyage_key = (values["unvessel"], values["voyage"])
             if all(voyage_key):

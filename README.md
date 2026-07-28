@@ -24,11 +24,26 @@ python sync.py probe
 python sync.py backfill
 ```
 
-最后注册计划任务，每天 07:30、12:30、19:30 各跑一轮增量，每周日夜里跑一次对账。需要管理员权限的 PowerShell：
+最后注册计划任务，每天 07:30、12:30、19:30 各跑一轮增量，每周日夜里跑一次对账。
+
+Windows 用管理员权限的 PowerShell：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\setup_schedule.ps1
 ```
+
+Linux 默认装 cron，服务器上建议用 systemd（有 `Persistent=true`，还能从 journal 看日志）：
+
+```bash
+./setup_schedule.sh              # cron
+./setup_schedule.sh --systemd    # systemd user timer
+./setup_schedule.sh --remove     # 卸载，两种都清
+```
+
+改时间用 `--times 08:00,13:00,20:00`，换解释器用 `--python /opt/py/bin/python3`。
+两个平台的任务都是同一套：调 `run_sync.ps1` / `run_sync.sh`，按退出码区分"完成"、"token 失效"、"上一轮还在跑"。
+
+cron 没有"错过就补跑"的机制，但这里不需要——增量窗口从上一次成功的水位线算起，漏掉的轮次会在下一轮自动补齐。
 
 `probe` 会打印它选定的策略。两种策略的差别只在请求量，采到的数据一样：
 
@@ -95,10 +110,12 @@ python sync.py replay --window 20260701000000,20260728000000
 ## python analyze.py 把上面这些结论当场重算一遍
 
 ```powershell
-python analyze.py              # 列画像、生命周期、不变量校验、跨码头分析
+python analyze.py              # 列画像、生命周期、不变量校验、跨码头分析、变更画像
 python analyze.py lifecycle    # 只看生命周期横截面
+python analyze.py changes      # 只看增量抓到的变更
 python analyze.py keys         # 唯一键与函数依赖，要全表扫很多次，最慢
 python analyze.py lifecycle --csv export/lifecycle.csv
+python analyze.py changes --csv export/changes_detail.csv
 ```
 
 它以只读方式打开库，不联网也不写库。上面每条结论它都会重新算，数据变了结论跟着变，不用信这份文档的一面之词。
@@ -106,6 +123,17 @@ python analyze.py lifecycle --csv export/lifecycle.csv
 列画像那节会标出全空的死列 —— 接口返回的字段里有一批从头到尾没有值，做分析时可以直接忽略。
 
 生命周期那张表按 `compareTime` 分桶，要点是方向跟直觉相反：**箱子走完流程就不再被比对，`compareTime` 停在最后一次，所以 `compareTime` 越新，阶段反而越早**。"未运抵"比例最高的那一桶就是当前的活跃工作面。分桶锚点取库里最新的 `compareTime` 而不是写死日期，所以每轮跑出来都能横着比。
+
+## 变更画像看的是快照里没有的东西
+
+前面几节都在回答"现在长什么样"，`python analyze.py changes` 回答的是"这段时间动了什么"—— 那才是每天跑三轮增量换来的东西，只看全量快照根本看不到。它从 `container_history` 的字段级差异出发，给四样：
+
+- **每轮的收成**：逐轮的新增／变更／空转／未变和请求数。连着几轮变更为 0，多半是哪里断了，不是真没变化。
+- **哪些字段在动**：按变更次数排的字段榜。动得最多的那几个才是这套系统日常真正在处理的东西。
+- **关键状态位的流转**：`passFlag`、`sendFlag` 等每个旧值→新值的计数。正向 `N→Y` 是流程在推进；反向 `Y→N` 数量少但要紧 —— 已经确认的状态又被推翻，正是增量窗口容易漏掉、要靠 `reconcile` 兜的那类。
+- **变更最集中的航次**，以及每个箱子被改过几次。
+
+加 `--csv` 会导出字段级明细，一行一个字段的变化（`changed_at, run_id, id, containerno, unvessel, voyage, field, old, new`）。这比 `changes_*.csv` 那种整行宽表小得多，也更适合直接喂给下游。
 
 ## token 失效时，从浏览器复制一个新的贴进 .env
 
@@ -132,13 +160,19 @@ python analyze.py lifecycle --csv export/lifecycle.csv
 
 ## 哈希没变的行完全不写库
 
-这是"增量更新而不是重新入库"的落点：
+这是"增量更新而不是重新入库"的落点。每行以接口返回的 `id` 为主键做 upsert，写之前先比全字段哈希，按结果分三条路：
 
-1. 每行以接口返回的 `id` 为主键做 upsert
-2. 写之前先比全字段哈希，**哈希没变就直接跳过** —— 不写库、不记历史、也不进增量 CSV
-3. 哈希变了才更新，同时把哪个字段从什么变成了什么写进 `container_history`
+| 情况                    | 处理                                                       | 记进 `sync_runs` |
+| ----------------------- | ---------------------------------------------------------- | ---------------- |
+| 哈希一样                | 完全不碰库                                                 | 未变             |
+| 只有 `compareTime` 变了 | 写入新值保持数据新鲜，但不记历史、不进增量 CSV             | 空转             |
+| 有业务字段变了          | 更新，并把哪个字段从什么变成了什么写进 `container_history` | 变更             |
 
 所以重跑、`replay`、对账都是幂等的，不会产生重复行。
+
+**"空转"这条路是必要的**：`compareTime` 是平台每比对一次就重刷的时间戳，实测一轮增量里 58106 条变更有 50592 条（87%）除了它什么都没动。全记成变更的话，真正有内容的 7514 条会被淹掉，`changes_*.csv` 也要大出近十倍。所以这类行照写不误（生命周期分析要靠 `compareTime` 保持最新），但不占用变更历史，`updated_at` 也不动 —— 让它保持"最后一次真变更"的含义。
+
+要调整算空转的字段，改 `store.py` 里的 `TOUCH_ONLY_FIELDS`。
 
 ## reconcile 兜住增量抓不到的变更
 
@@ -148,18 +182,33 @@ python analyze.py lifecycle --csv export/lifecycle.csv
 
 **未比对的新行（`compareTime` 为空）被窗口滤掉**。`probe` 会实测这一点，确认存在时，增量轮自动追加一次 `compareFlag=N` 的查询作兜底，只多一两次请求。
 
+## 一轮一个日志文件
+
+出问题时要查的是"某一轮到底发生了什么"，所以日志落两路：
+
+| 位置                            | 内容                                           |
+| ------------------------------- | ---------------------------------------------- |
+| `logs/runs/<时间戳>_<命令>.log` | 单轮的完整明细，一轮一个文件，默认留最近 90 个 |
+| `logs/sync.log`                 | 所有轮次连起来的流水，按 5 MB 滚动，留 5 份    |
+
+一轮 backfill 就能写几千行，全挤在一个文件里既会被滚动切断，也没法把某一轮单独摘出来。`python sync.py status` 会在每轮后面标出它对应的日志文件名，照着去 `logs/runs/` 里找就行。
+
+留存数量用 `.env` 里的 `LOG_KEEP_RUN_FILES` 调，设 0 表示不清理。只读命令（`status`、`export`）不会往 `logs/runs/` 里落文件。
+
+Linux 上 cron 的输出另外收在 `logs/cron.log`；用 systemd 的话直接 `journalctl --user -u npedi-incremental`。
+
 ## 每个文件负责什么
 
-| 文件                 | 作用                             |
-| -------------------- | -------------------------------- |
-| `config.py`          | `.env` 解析与默认值              |
-| `client.py`          | HTTP 认证、重试、限速、翻页      |
-| `store.py`           | SQLite 建表、哈希 upsert、水位线 |
-| `exporter.py`        | CSV 导出，原子写入               |
-| `sync.py`            | 主流程与命令行入口               |
-| `analyze.py`         | 离线数据画像，只读不联网         |
-| `run_sync.ps1`       | 计划任务包装，含失效通知         |
-| `setup_schedule.ps1` | 一键注册计划任务                 |
+| 文件                                      | 作用                               |
+| ----------------------------------------- | ---------------------------------- |
+| `config.py`                               | `.env` 解析与默认值                |
+| `client.py`                               | HTTP 认证、重试、限速、翻页        |
+| `store.py`                                | SQLite 建表、哈希 upsert、水位线   |
+| `exporter.py`                             | CSV 导出，原子写入                 |
+| `sync.py`                                 | 主流程与命令行入口                 |
+| `analyze.py`                              | 离线数据画像，只读不联网           |
+| `run_sync.ps1`、`run_sync.sh`             | 计划任务包装，含失效通知           |
+| `setup_schedule.ps1`、`setup_schedule.sh` | 一键注册计划任务（Windows／Linux） |
 
 ## 别把工作目录整个传出去
 

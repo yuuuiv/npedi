@@ -96,7 +96,16 @@ class FileLock:
             self._fh = None
 
 
-def setup_logging(cfg: Config, verbose: bool = False) -> None:
+# 会真正联网采集的子命令：只有这些才单独开一个轮次日志
+COLLECTING_COMMANDS = ("probe", "backfill", "incremental", "reconcile", "replay")
+
+
+def setup_logging(cfg: Config, verbose: bool = False, command: str = "") -> None:
+    """装两路文件日志：滚动的 sync.log 看全局，logs/runs/ 下一轮一个文件看单轮。
+
+    一轮 backfill 就能写出几千行，全都挤在 sync.log 里的话，
+    既会被大小滚动切断，也没法回答"12:30 那轮到底发生了什么"。
+    """
     cfg.log_dir.mkdir(parents=True, exist_ok=True)
     root = logging.getLogger("npedi")
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
@@ -112,6 +121,29 @@ def setup_logging(cfg: Config, verbose: bool = False) -> None:
     )
     rotating.setFormatter(fmt)
     root.addHandler(rotating)
+
+    if command not in COLLECTING_COMMANDS:
+        return          # status / export 只读，不该往 runs/ 里落文件
+
+    runs_dir = cfg.log_dir / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    cfg.run_log_name = f"{datetime.now():%Y%m%d_%H%M%S}_{command}.log"
+    per_run = logging.FileHandler(runs_dir / cfg.run_log_name, encoding="utf-8")
+    per_run.setFormatter(fmt)
+    root.addHandler(per_run)
+    _prune_run_logs(runs_dir, cfg.log_keep_run_files)
+
+
+def _prune_run_logs(runs_dir: Path, keep: int) -> None:
+    """只留最近 keep 个轮次日志。文件名以时间戳打头，按名字排序即按时间排序。"""
+    if keep <= 0:
+        return
+    stale = sorted(runs_dir.glob("*.log"))[:-keep]
+    for path in stale:
+        try:
+            path.unlink()
+        except OSError as exc:
+            log.warning("清理旧轮次日志失败 %s: %s", path.name, exc)
 
 
 def raise_alert(cfg: Config, message: str) -> None:
@@ -215,9 +247,10 @@ def fetch_into_store(
         _merge(stats, store.upsert_containers(rows, run_id))
         pages = max(1, -(-total // client.cfg.page_size))
         log.info(
-            "%s 第 %d/%d 页：本页 %d 行｜累计 新增 %d / 变更 %d / 未变 %d",
+            "%s 第 %d/%d 页：本页 %d 行｜累计 新增 %d / 变更 %d / 空转 %d / 未变 %d",
             label, page, pages, len(rows),
-            stats.get("new", 0), stats.get("updated", 0), stats.get("unchanged", 0),
+            stats.get("new", 0), stats.get("updated", 0),
+            stats.get("touched", 0), stats.get("unchanged", 0),
         )
     return stats
 
@@ -360,7 +393,7 @@ def run_backfill(cfg: Config, args) -> int:
     """首次全量回填（§4.1）。"""
     now = datetime.now()
     with Store(cfg.db_path) as store, NpediClient(cfg) as client:
-        run_id = store.start_run("backfill", None, now.strftime("%Y%m%d%H%M%S"))
+        run_id = store.start_run("backfill", None, now.strftime("%Y%m%d%H%M%S"), cfg.run_log_name)
         stats: dict[str, int] = {}
         try:
             # 探活放在 start_run 之后：token 失效的那一轮同样要在 sync_runs 里留痕
@@ -382,8 +415,9 @@ def run_backfill(cfg: Config, args) -> int:
                     store.meta_set(META_BACKFILL_PAGE, str(page))
                     pages = max(1, -(-total // cfg.page_size))
                     log.info(
-                        "全量回填 第 %d/%d 页｜累计 新增 %d / 变更 %d / 未变 %d",
-                        page, pages, stats.get("new", 0), stats.get("updated", 0), stats.get("unchanged", 0),
+                        "全量回填 第 %d/%d 页｜累计 新增 %d / 变更 %d / 空转 %d / 未变 %d",
+                        page, pages, stats.get("new", 0), stats.get("updated", 0),
+                        stats.get("touched", 0), stats.get("unchanged", 0),
                     )
                 store.conn.execute("UPDATE voyages SET backfilled=1")
                 store.conn.commit()
@@ -442,7 +476,7 @@ def run_incremental(cfg: Config, args, kind: str = "incremental") -> int:
         # 先算窗口：算不出来（比如还没跑过 backfill）时直接退出，不必浪费一次请求
         window, watermark = resolve_window(cfg, store, now, getattr(args, "window", None))
         wm_to = None if kind == "replay" else watermark.strftime("%Y%m%d%H%M%S")
-        run_id = store.start_run(kind, window.split(",")[0], wm_to)
+        run_id = store.start_run(kind, window.split(",")[0], wm_to, cfg.run_log_name)
         log.info("%s 开始：compareTime 窗口 = %s", kind, window)
         stats: dict[str, int] = {}
         is_replay = kind == "replay"
@@ -526,7 +560,7 @@ def run_reconcile(cfg: Config, args) -> int:
     """活跃航次小全量对账（§5 安全网 1）：不带时间窗口拉全量，与库中 hash 对账。"""
     now = datetime.now()
     with Store(cfg.db_path) as store, NpediClient(cfg) as client:
-        run_id = store.start_run("reconcile", None, now.strftime("%Y%m%d%H%M%S"))
+        run_id = store.start_run("reconcile", None, now.strftime("%Y%m%d%H%M%S"), cfg.run_log_name)
         stats: dict[str, int] = {}
         try:
             # 探活放在 start_run 之后：token 失效的那一轮同样要在 sync_runs 里留痕
@@ -566,9 +600,10 @@ def run_reconcile(cfg: Config, args) -> int:
 def _report(cfg: Config, store: Store, run_id: int, client: NpediClient,
             stats: dict[str, int], kind: str) -> None:
     log.info(
-        "%s 完成：请求 %d 次｜读取 %d 行｜新增 %d｜变更 %d｜未变 %d",
+        "%s 完成：请求 %d 次｜读取 %d 行｜新增 %d｜变更 %d｜空转 %d｜未变 %d",
         kind, client.request_count, stats.get("seen", 0),
-        stats.get("new", 0), stats.get("updated", 0), stats.get("unchanged", 0),
+        stats.get("new", 0), stats.get("updated", 0),
+        stats.get("touched", 0), stats.get("unchanged", 0),
     )
     written = export_all(cfg, store, run_id)
     for name, desc in written.items():
@@ -623,11 +658,13 @@ def cmd_status(cfg: Config, args) -> int:
             print("token 启用时间  : 未记录（跑一轮任意联网命令后开始计龄）")
         if cfg.alert_file.exists():
             print(f"\n!! token 告警未清除：{cfg.alert_file}")
-        print("\n=== 最近运行 ===")
+        print(f"\n=== 最近运行（单轮日志在 {cfg.log_dir / 'runs'}）===")
         for r in store.recent_runs(10):
             print(f"  #{r['run_id']:<4} {r['kind']:<12} {r['started_at']} → {r['finished_at'] or '进行中'} "
                   f"{r['status']:<12} 请求 {r['requests_made']:<5} "
-                  f"新增 {r['rows_new']:<6} 变更 {r['rows_updated']:<6} 未变 {r['rows_unchanged']:<7}"
+                  f"新增 {r['rows_new']:<6} 变更 {r['rows_updated']:<6} "
+                  f"空转 {r['rows_touched'] or 0:<6} 未变 {r['rows_unchanged']:<7}"
+                  + (f" log={r['log_file']}" if r["log_file"] else "")
                   + (f" err={r['error'][:60]}" if r["error"] else ""))
     return EXIT_OK
 
@@ -697,7 +734,7 @@ def dispatch(cfg: Config, command: str, args) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cfg = load_config(args.env)
-    setup_logging(cfg, args.verbose)
+    setup_logging(cfg, args.verbose, args.command)
     return dispatch(cfg, args.command, args)
 
 

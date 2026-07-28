@@ -10,8 +10,10 @@
 用法：
     python analyze.py              # 跑除 keys 外的全部（keys 较慢）
     python analyze.py lifecycle    # 只跑生命周期横截面
+    python analyze.py changes      # 只看增量抓到的变更
     python analyze.py all          # 全部，含函数依赖检验
     python analyze.py lifecycle --csv export/lifecycle.csv
+    python analyze.py changes --csv export/changes_detail.csv   # 字段级变更明细
 
 各节：
     columns     每列的非空率 / 基数 / 常见值，标出全空的死列
@@ -19,6 +21,10 @@
     lifecycle   按 compareTime 分桶的生命周期横截面 ★核心
     rules       三条不变量的校验与反例计数
     terminals   同箱同票同航次跨两个码头的成对分析
+    changes     增量抓到的变更：哪些字段在动、状态位怎么流转 ★核心
+
+前五节看的是"现在长什么样"，changes 看的是"这段时间发生了什么"——
+后者才是每天跑三轮增量换来的东西，单看快照是看不到的。
 """
 
 from __future__ import annotations
@@ -237,6 +243,99 @@ class Report:
         print("  → 按箱聚合前必须先滤掉空壳行，否则同一个箱子会被算两次。")
 
 
+    # ---------------------------------------------------------------- changes
+
+    def changes(self, csv_path: str | None = None) -> None:
+        """增量抓到的变更画像。数据来自 container_history 的字段级差异。
+
+        快照回答"现在什么样"，这里回答"这段时间动了什么"——
+        是每天三轮增量真正换来的东西。
+        """
+        nhist = self.n("SELECT COUNT(*) FROM container_history")
+        if nhist == 0:
+            head("变更画像")
+            print("  还没有变更历史。跑过 backfill 之后，等增量轮攒下变更再看这一节。")
+            return
+
+        head(f"变更画像（{nhist} 条字段级变更记录）")
+
+        print("  每轮的收成：")
+        print(f"    {'轮次':<6}{'类型':<13}{'开始时间':<21}"
+              + "".join(f"{t:>9}" for t in ("新增", "变更", "空转", "未变", "请求")))
+        print("    " + "-" * 88)
+        # rows_touched 是后加的列，老库里可能还没有（analyze 只读，不做迁移）
+        run_cols = {r[1] for r in self.conn.execute("PRAGMA table_info(sync_runs)")}
+        touched = "COALESCE(rows_touched,0)" if "rows_touched" in run_cols else "0"
+        for r in self.conn.execute(
+                f"SELECT run_id, kind, started_at, rows_new, rows_updated, {touched}, "
+                "rows_unchanged, requests_made "
+                "FROM sync_runs WHERE status='ok' ORDER BY run_id DESC LIMIT 15"):
+            print(f"    #{r[0]:<5}{r[1]:<13}{r[2]:<21}"
+                  + "".join(f"{v:>9}" for v in (r[3], r[4], r[5], r[6], r[7])))
+
+        # 字段变更频率。json_each 把 {"字段": [旧,新]} 摊平成一行一个字段。
+        print("\n  哪些字段在动：")
+        rows = self.conn.execute(
+            "SELECT je.key, COUNT(*) n FROM container_history h, json_each(h.changed_fields) je "
+            "GROUP BY je.key ORDER BY n DESC").fetchall()
+        width = max(len(k) for k, _ in rows)
+        for key, n in rows:
+            print(f"    {key:<{width + 2}}{n:>8}  {pct(n, nhist)}")
+
+        # 只有 TOUCH_ONLY 字段变的那些：平台重新比对了一遍，业务内容没动
+        noise = self.n("""
+            SELECT COUNT(*) FROM (SELECT h.hist_id FROM container_history h,
+            json_each(h.changed_fields) je GROUP BY h.hist_id
+            HAVING COUNT(*) = 1 AND MAX(je.key) = 'compareTime')""")
+        if noise:
+            print(f"\n  其中 {noise} 条（{pct(noise, nhist).strip()}）只有 compareTime 变了 —— "
+                  "平台重新比对了一遍，业务内容没动。")
+            print("  这些是历史遗留：现在的 upsert 已经把它们归为「空转」，不再记进变更历史。")
+
+        print("\n  关键状态位的流转（旧值 → 新值）：")
+        flags = ("passFlag", "sendFlag", "sldFlag", "matouFlag", "customFlag",
+                 "compareFlag", "stayFlag")
+        for flag in flags:
+            moves = self.conn.execute(f"""
+                SELECT COALESCE(NULLIF(json_extract(changed_fields,'$."{flag}"[0]'),''),'(空)'),
+                       COALESCE(NULLIF(json_extract(changed_fields,'$."{flag}"[1]'),''),'(空)'),
+                       COUNT(*) n
+                FROM container_history
+                WHERE json_extract(changed_fields,'$."{flag}"') IS NOT NULL
+                GROUP BY 1,2 ORDER BY n DESC""").fetchall()
+            if not moves:
+                continue
+            total = sum(n for _, _, n in moves)
+            detail = "，".join(f"{a}→{b} {n}" for a, b, n in moves)
+            print(f"    {flag:<13}{total:>7}   {detail}")
+        print("    正向 N→Y 是流程在推进；反向 Y→N 少但要紧 —— 那是已经确认的状态又被推翻。")
+
+        print("\n  变更最集中的航次：")
+        for un, voy, n, boxes in self.conn.execute("""
+                SELECT c.unvessel, c.voyage, COUNT(*) n, COUNT(DISTINCT c.id) boxes
+                FROM container_history h JOIN containers c ON c.id = h.id
+                GROUP BY c.unvessel, c.voyage ORDER BY n DESC LIMIT 10"""):
+            print(f"    {un}/{voy:<8}{n:>8} 次变更，涉及 {boxes} 个箱子")
+
+        churn = self.conn.execute("""
+            SELECT cnt, COUNT(*) FROM (SELECT id, COUNT(*) cnt FROM container_history GROUP BY id)
+            GROUP BY cnt ORDER BY cnt""").fetchall()
+        print("\n  每个箱子被改过几次：" + "，".join(f"{c} 次 {n} 个" for c, n in churn[:8]))
+
+        if csv_path:
+            with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["changed_at", "run_id", "id", "containerno", "unvessel",
+                            "voyage", "field", "old", "new"])
+                w.writerows(self.conn.execute("""
+                    SELECT h.changed_at, h.run_id, h.id, c.containerno, c.unvessel, c.voyage,
+                           je.key, json_extract(je.value,'$[0]'), json_extract(je.value,'$[1]')
+                    FROM container_history h
+                    JOIN containers c ON c.id = h.id, json_each(h.changed_fields) je
+                    ORDER BY h.hist_id"""))
+            print(f"\n  已写出字段级变更明细 {csv_path}")
+
+
 def head(title: str) -> None:
     print(f"\n{'=' * 80}\n{title}\n{'=' * 80}")
 
@@ -265,11 +364,14 @@ def main() -> int:
         sections[want]()
     elif want == "lifecycle":
         rep.lifecycle(csv_path)
+    elif want == "changes":
+        rep.changes(csv_path)
     else:
         rep.columns()
-        rep.lifecycle(csv_path)
+        rep.lifecycle(csv_path if want != "all" else None)
         rep.rules()
         rep.terminals()
+        rep.changes()
         if want == "all":
             rep.keys()
         else:
