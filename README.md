@@ -142,17 +142,26 @@ pip install -r requirements.txt
 cp .env.example .env      # 然后把 WEB_TOKEN= 填上，取值方法见下面「token 失效」那节
 ```
 
-**方案一：把本机的库拷过去（推荐）。** 保住已经采到的 54 万行 npp 明细和 3.4 万条进出门报文，回填直接从断点续跑。拷之前先在本机让 WAL 落盘，否则拷过去的库会缺最后几分钟的数据：
+**方案一：远端已经跑过 npp 的 backfill —— 什么都不用传。** 直接 `git pull` 就行。进出门那两张表会在下次打开库时自动建好，npp 的数据一行不动，**没有需要手动执行的迁移命令**。`.env` 也不用改，新增的 `GATE_*` 配置项全都有默认值。
+
+**方案二：把本机的库整个拷过去。** 适合本机已经采了一部分、不想重跑的情况。拷之前先让 WAL 落盘，否则拷过去的库会缺最后几分钟的数据：
 
 ```bash
 python -c "import sqlite3; c=sqlite3.connect('npedi.sqlite'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.close()"
 scp npedi.sqlite 远端:~/npedi/          # 落盘后 .sqlite-wal/.sqlite-shm 不用拷
 ```
 
-**方案二：远端从零开始。** 不用拷任何数据，但要多花约一小时把 npp 那部分重跑一遍：
+**方案三：远端从零开始。** 不用拷任何数据，但要多花约一小时把 npp 那部分重跑一遍：
 
 ```bash
 python sync.py probe && python sync.py backfill
+```
+
+正式开跑之前先冒烟一下，确认 token 有效、表建好了、能采到东西。只花三四次请求：
+
+```bash
+python sync.py gate-backfill --limit 2
+python sync.py gate-status        # 应该能看到航次目录 13000+、报文数不为 0
 ```
 
 然后启动回填。它会一直跑到全部铺完为止，中途别关终端 —— 用 `nohup` 或 `screen` 让它脱离会话：
