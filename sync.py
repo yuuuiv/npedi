@@ -9,6 +9,13 @@
     python sync.py export                # 仅从库导出 CSV
     python sync.py status                # 查看库状态与最近运行
 
+进出门（CODECO）管线，见 ARCHITECTURE-GATE.md：
+
+    python sync.py gate-backfill --max-requests 5000   # 历史回填，按预算分次跑
+    python sync.py gate-incremental                    # 增量（每日一次）
+    python sync.py gate-gap                            # 导出 npp 缺失的箱子清单
+    python sync.py gate-status                         # 进出门库状态
+
 退出码：0 成功 / 1 失败 / 2 token 失效（需人工换 token）/ 3 已有实例在运行
 """
 
@@ -97,7 +104,10 @@ class FileLock:
 
 
 # 会真正联网采集的子命令：只有这些才单独开一个轮次日志
-COLLECTING_COMMANDS = ("probe", "backfill", "incremental", "reconcile", "replay")
+COLLECTING_COMMANDS = (
+    "probe", "backfill", "incremental", "reconcile", "replay",
+    "gate-backfill", "gate-incremental",
+)
 
 
 def setup_logging(cfg: Config, verbose: bool = False, command: str = "") -> None:
@@ -660,7 +670,7 @@ def cmd_status(cfg: Config, args) -> int:
             print(f"\n!! token 告警未清除：{cfg.alert_file}")
         print(f"\n=== 最近运行（单轮日志在 {cfg.log_dir / 'runs'}）===")
         for r in store.recent_runs(10):
-            print(f"  #{r['run_id']:<4} {r['kind']:<12} {r['started_at']} → {r['finished_at'] or '进行中'} "
+            print(f"  #{r['run_id']:<4} {r['kind']:<17} {r['started_at']} → {r['finished_at'] or '进行中'} "
                   f"{r['status']:<12} 请求 {r['requests_made']:<5} "
                   f"新增 {r['rows_new']:<6} 变更 {r['rows_updated']:<6} "
                   f"空转 {r['rows_touched'] or 0:<6} 未变 {r['rows_unchanged']:<7}"
@@ -693,13 +703,42 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("export", help="仅从库导出 CSV")
     sub.add_parser("status", help="查看库状态与最近运行")
+
+    # --- 进出门管线（ARCHITECTURE-GATE.md）---
+    p_gate_back = sub.add_parser("gate-backfill", help="进出门历史数据回填（按请求预算分次跑）")
+    p_gate_back.add_argument("--max-requests", type=int, default=None,
+                             help="本次运行的请求预算，跑满即停；0 表示不限（默认取 .env）")
+    p_gate_back.add_argument("--limit", type=int, default=None,
+                             help="本次最多处理多少个航次×方向")
+    p_gate_back.add_argument("--export-all", action="store_true",
+                             help="回填结束后也重写全量快照 CSV（默认只出增量文件）")
+
+    p_gate_inc = sub.add_parser("gate-incremental", help="进出门增量（每日一次，排在 npp 增量之后）")
+    p_gate_inc.add_argument("--limit", type=int, default=None, help="本轮最多检查多少个活跃航次")
+    p_gate_inc.add_argument("--max-requests", type=int, default=None, help="本轮活跃航次阶段的请求预算")
+    sub.add_parser("gate-export", help="仅从库导出进出门 CSV")
+    sub.add_parser("gate-gap", help="导出 npp 缺失的箱子清单（进出门 ↔ npp 对照）")
+    sub.add_parser("gate-status", help="查看进出门库状态与最近运行")
     return parser
 
 
 def dispatch(cfg: Config, command: str, args) -> int:
     """执行一个子命令，统一处理锁、token 失效与异常 → 退出码。"""
-    if command in ("export", "status"):
-        return {"export": cmd_export, "status": cmd_status}[command](cfg, args)
+    # gate 模块 import 本模块的 preflight，放在函数里加载即可避开循环导入
+    from gate import (
+        cmd_gate_export, cmd_gate_gap, cmd_gate_status,
+        run_gate_backfill, run_gate_incremental,
+    )
+
+    readonly = {
+        "export": cmd_export,
+        "status": cmd_status,
+        "gate-export": cmd_gate_export,
+        "gate-gap": cmd_gate_gap,
+        "gate-status": cmd_gate_status,
+    }
+    if command in readonly:
+        return readonly[command](cfg, args)
 
     handlers = {
         "probe": cmd_probe,
@@ -707,9 +746,13 @@ def dispatch(cfg: Config, command: str, args) -> int:
         "incremental": lambda c, a: run_incremental(c, a, "incremental"),
         "reconcile": run_reconcile,
         "replay": lambda c, a: run_incremental(c, a, "replay"),
+        "gate-backfill": run_gate_backfill,
+        "gate-incremental": run_gate_incremental,
     }
+    # 两条管线各用各的锁，互不阻塞（见 Config.gate_lock_file 的说明）
+    lock = cfg.gate_lock_file if command.startswith("gate-") else cfg.lock_file
     try:
-        with FileLock(cfg.lock_file):
+        with FileLock(lock):
             return handlers[command](cfg, args)
     # AuthExpired 继承自 RuntimeError，必须排在 RuntimeError 之前捕获，
     # 否则 token 失效会被当成普通失败，既不写告警文件也拿不到退出码 2。

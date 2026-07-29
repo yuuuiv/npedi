@@ -2,6 +2,7 @@
 .env
 ALERT_TOKEN_EXPIRED
 .sync.lock
+.sync.gate.lock
 
 # 抓包文件含 token 与账号手机号/邮箱等个人信息
 *.har

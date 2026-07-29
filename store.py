@@ -151,6 +151,103 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 """
 
+# --------------------------------------------------------------------------
+# 进出门（CODECO 报文），对应 ARCHITECTURE-GATE.md §3
+# --------------------------------------------------------------------------
+
+# 入库字段。接口每行有 66 个键，实测仅 17 个有值，其余稀疏字段原样进 raw_json。
+GATE_FIELDS: tuple[str, ...] = (
+    "id",
+    "type",              # GATE_IN | GATE_OUT
+    "vesselcode",        # UN9475648
+    "voyage",
+    "vessel",
+    "direct",
+    "senderCode",
+    "ctnNo",
+    "blNo",
+    "ctnOperatorCode",
+    "ctnSizeType",
+    "ctnStatus",
+    "containerType",
+    "ctnGrossWeight",
+    "sealNo",
+    "msgReceiveTime",
+    "inGateTime",
+    "outGateTime",
+    "dlPortCode",
+    "signTrade",
+)
+
+# 这两列取自请求参数：接口返回的行里 type 与 vesselCode 恒为 null，
+# UN 号只存在于查询条件中，不落列的话入库后就再也认不出这行属于哪条船。
+GATE_PARAM_FIELDS: frozenset[str] = frozenset({"type", "vesselcode"})
+GATE_ROW_FIELDS: tuple[str, ...] = tuple(f for f in GATE_FIELDS if f not in GATE_PARAM_FIELDS)
+# SQLite 标识符大小写不敏感（vesselcode 与接口的 vesselCode 是同一列），
+# 判断"这个键是不是已知字段"时统一转小写比较。
+GATE_KNOWN_KEYS: frozenset[str] = frozenset(f.lower() for f in GATE_FIELDS)
+GATE_COMPARE_FIELDS: tuple[str, ...] = tuple(f for f in GATE_FIELDS if f != "id")
+
+GATE_DIRECTIONS: tuple[str, ...] = ("GATE_IN", "GATE_OUT")
+# 每个方向对应 gate_voyages 上的两列（断点标记 / 总条数）
+GATE_DONE_COLUMNS: dict[str, tuple[str, str]] = {
+    "GATE_IN": ("gatein_done_at", "gatein_total"),
+    "GATE_OUT": ("gateout_done_at", "gateout_total"),
+}
+
+# msgReceiveTime 是 14 位，两个闸口时间是 12 位（yyyyMMddHHmm，没有秒）
+GATE_TIMESTAMP_FIELDS: tuple[str, ...] = ("msgReceiveTime", "inGateTime", "outGateTime")
+
+_GATE_COLS = ", ".join(f'"{f}"' for f in GATE_FIELDS)
+_GATE_PLACEHOLDERS = ", ".join("?" for _ in GATE_FIELDS)
+
+GATE_SCHEMA = f"""
+-- 进出门航次目录（独立于 voyages：voyages 是 npp 在册目录，只有 848 个；
+-- 这份目录实测 13954 个船×航次对，数据可回溯到 2022 年初）
+CREATE TABLE IF NOT EXISTS gate_voyages (
+    vesselcode   TEXT NOT NULL,
+    voyage       TEXT NOT NULL,
+    vesselename  TEXT,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at  TEXT NOT NULL,
+    last_event_at TEXT,                     -- 该航次已见过的最大 msgReceiveTime（14 位原文）
+    gatein_done_at  TEXT, gatein_total  INTEGER,   -- 回填断点：NULL=该方向尚未完成
+    gateout_done_at TEXT, gateout_total INTEGER,
+    idle_rounds  INTEGER NOT NULL DEFAULT 0,-- 连续多少轮增量没有新报文
+    inactive     INTEGER NOT NULL DEFAULT 0,-- 1=已退出活跃集合，增量不再查询
+    PRIMARY KEY (vesselcode, voyage)
+);
+CREATE INDEX IF NOT EXISTS idx_gate_voyages_pending
+    ON gate_voyages(gatein_done_at, gateout_done_at);
+
+-- 进出门报文流水。id 里含接收时间戳，报文天然只增不改（append-only），
+-- 所以这里没有 row_hash / 变更历史那一套 —— 做了是纯开销。
+CREATE TABLE IF NOT EXISTS gate_events (
+    {chr(10).join(f'    "{f}" TEXT{" PRIMARY KEY" if f == "id" else ""},' for f in GATE_FIELDS).strip()}
+    raw_json   TEXT NOT NULL DEFAULT '',    -- 其余 40+ 个稀疏字段，将来要用不必重爬
+    run_id     INTEGER,                     -- 首次入库的轮次，供增量 CSV 导出
+    fetched_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gate_events_voyage ON gate_events(vesselcode, voyage);
+CREATE INDEX IF NOT EXISTS idx_gate_events_ctn    ON gate_events("ctnNo", "blNo");
+CREATE INDEX IF NOT EXISTS idx_gate_events_run    ON gate_events(run_id);
+
+-- 与 npp 数据的关联视图（补数入口，ARCHITECTURE-GATE.md §5）。
+-- join 条件里带 receivetime 非空：npp 的同一个箱子会在两个码头各登记一行，
+-- 其中约 87% 只有一边真收到货，不滤掉空壳行的话缺口统计会虚高（见 ANALYSIS.md 第五节）。
+CREATE VIEW IF NOT EXISTS v_gate_vs_npp AS
+SELECT g.vesselcode, g.voyage, g.vessel, g."type", g."senderCode",
+       g."ctnNo", g."blNo", g."inGateTime", g."outGateTime", g."msgReceiveTime",
+       c.id AS npp_id, c.matou AS npp_matou, c."passFlag", c."sendFlag", c.remark
+FROM gate_events g
+LEFT JOIN containers c
+       ON c.containerno = g."ctnNo"
+      AND c.billno      = g."blNo"
+      AND c.unvessel    = g.vesselcode
+      AND c.voyage      = g.voyage
+      AND TRIM(COALESCE(c.receivetime, '')) <> '';
+"""
+
 
 def now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -207,9 +304,12 @@ class Store:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path)
+        # timeout 从默认的 5s 提到 60s：npp 增量与进出门回填现在可能同时在跑，
+        # WAL 下同一时刻只允许一个写者，撞上了就等对方提交（每页一提交，都是毫秒级）。
+        self.conn = sqlite3.connect(self.path, timeout=60.0)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self.conn.executescript(GATE_SCHEMA)
         self._migrate()
         self.conn.commit()
 
@@ -252,6 +352,16 @@ class Store:
 
     def start_run(self, kind: str, wm_from: str | None, wm_to: str | None,
                   log_file: str = "") -> int:
+        # 上一轮如果是被 kill / 断电 / 崩溃结束的，finish_run 没机会跑，
+        # 会永远挂在 running 上。开新一轮时顺手收尾，免得 status 里越积越多。
+        stale = self.conn.execute(
+            "UPDATE sync_runs SET status='interrupted', finished_at=?, "
+            "error='进程未正常结束（被中断或崩溃），断点已保留' "
+            "WHERE status='running'", (now_iso(),),
+        ).rowcount
+        if stale:
+            log.warning("发现 %d 条未收尾的运行记录，已标记为 interrupted", stale)
+
         cur = self.conn.execute(
             "INSERT INTO sync_runs(kind, started_at, watermark_from, watermark_to, status, log_file) "
             "VALUES(?,?,?,?, 'running', ?)",
@@ -530,3 +640,285 @@ class Store:
         return int(self.conn.execute(
             "SELECT COUNT(*) FROM run_changes WHERE run_id=?", (run_id,)
         ).fetchone()[0])
+
+    # ------------------------------------------------------- 进出门：航次目录
+
+    def upsert_gate_voyages(
+        self, items: Iterable[dict], now: datetime
+    ) -> tuple[dict[str, int], list[tuple[str, str]]]:
+        """写入进出门航次目录，返回 (计数, 本次新出现的航次键)。
+
+        目录里有重复（实测 14337 条 → 13954 个唯一对），且没有任何日期字段，
+        所以"哪些是新航次"只能靠与库里已有键求差集得到。
+        """
+        stats = {"seen": 0, "unique": 0, "new": 0, "duplicates": 0}
+        ts = now.strftime("%Y-%m-%d %H:%M:%S")
+
+        best: dict[tuple[str, str], dict] = {}
+        for item in items:
+            vessel_code = _norm(item.get("vesselcode"))
+            voyage = _norm(item.get("voyage"))
+            if not vessel_code or not voyage:
+                continue
+            stats["seen"] += 1
+            key = (vessel_code, voyage)
+            if key in best:
+                stats["duplicates"] += 1
+                continue
+            best[key] = item
+        stats["unique"] = len(best)
+
+        existing = {
+            (r["vesselcode"], r["voyage"])
+            for r in self.conn.execute("SELECT vesselcode, voyage FROM gate_voyages")
+        }
+        new_keys = [key for key in best if key not in existing]
+        stats["new"] = len(new_keys)
+
+        self.conn.executemany(
+            """
+            INSERT INTO gate_voyages(vesselcode, voyage, vesselename, first_seen_at, last_seen_at)
+            VALUES(?,?,?,?,?)
+            ON CONFLICT(vesselcode, voyage) DO UPDATE SET
+                vesselename=COALESCE(NULLIF(excluded.vesselename, ''), gate_voyages.vesselename),
+                last_seen_at=excluded.last_seen_at
+            """,
+            [
+                (vessel_code, voyage, _norm(item.get("vesselename")), ts, ts)
+                for (vessel_code, voyage), item in best.items()
+            ],
+        )
+        self.conn.commit()
+        return stats, new_keys
+
+    def gate_units_pending(
+        self, *, limit: int | None = None, keys: Sequence[tuple[str, str]] | None = None,
+    ) -> list[tuple[str, str, str, str]]:
+        """待回填的 (船, 航次, 船名, 方向) 单元，按优先级排序。
+
+        优先级 0 = 该航次同时在 npp 的 voyages 表里（当前工作面，先补齐）；
+        优先级 1 = 只在进出门目录里的历史航次。同一航次的两个方向相邻，
+        便于按航次成组完成。keys 非空时只取指定航次（增量轮回填新航次用）。
+        """
+        if keys is not None and not keys:
+            return []
+        wanted = set(keys) if keys is not None else None
+
+        # keys 的过滤放在 Python 侧：SQLite 不支持 `(a,b) IN ((?,?),(?,?))`
+        # 这种字面行值列表，而待回填集合最多一万多行，全取回来再筛毫无压力。
+        sql = """
+            SELECT g.vesselcode, g.voyage, g.vesselename,
+                   g.gatein_done_at, g.gateout_done_at,
+                   CASE WHEN v.unvessel IS NULL THEN 1 ELSE 0 END AS prio
+            FROM gate_voyages g
+            LEFT JOIN voyages v ON v.unvessel = g.vesselcode AND v.voyage = g.voyage
+            WHERE (g.gatein_done_at IS NULL OR g.gateout_done_at IS NULL)
+            ORDER BY prio, g.vesselcode, g.voyage
+        """
+        units: list[tuple[str, str, str, str]] = []
+        for row in self.conn.execute(sql):
+            key = (row["vesselcode"], row["voyage"])
+            if wanted is not None and key not in wanted:
+                continue
+            for direction in GATE_DIRECTIONS:
+                if row[GATE_DONE_COLUMNS[direction][0]] is None:
+                    units.append((key[0], key[1], row["vesselename"] or "", direction))
+            if limit and len(units) >= limit:
+                break
+        return units[:limit] if limit else units
+
+    def mark_gate_done(self, vesselcode: str, voyage: str, direction: str, total: int) -> None:
+        done_col, total_col = GATE_DONE_COLUMNS[direction]
+        self.conn.execute(
+            f"UPDATE gate_voyages SET {done_col}=?, {total_col}=? WHERE vesselcode=? AND voyage=?",
+            (now_iso(), total, vesselcode, voyage),
+        )
+        self.conn.commit()
+
+    def gate_active_voyages(self, now: datetime, *, active_days: int) -> list[sqlite3.Row]:
+        """增量要查的活跃航次（ARCHITECTURE-GATE.md §4.2 步骤 2）。
+
+        两类：仍在 npp 在册目录里的（约 850 个，核放工作面）；
+        以及不在 npp 目录、但最近 active_days 天内还有报文的
+        （驳船系列 TIELU*/HAITIE* 根本不进 npp 目录，只能靠报文时间判断死活）。
+        """
+        cutoff = (now - timedelta(days=active_days)).strftime("%Y%m%d%H%M%S")
+        return self.conn.execute(
+            """
+            SELECT g.*, v.last_seen_at AS npp_last_seen
+            FROM gate_voyages g
+            LEFT JOIN voyages v ON v.unvessel = g.vesselcode AND v.voyage = g.voyage
+            WHERE g.inactive = 0
+              AND (v.unvessel IS NOT NULL
+                   OR (g.last_event_at IS NOT NULL AND g.last_event_at >= ?))
+            ORDER BY COALESCE(g.last_event_at, '') DESC, g.vesselcode, g.voyage
+            """,
+            (cutoff,),
+        ).fetchall()
+
+    def npp_catalog_watermark(self) -> str | None:
+        """npp 航次目录最近一次同步的时刻。
+
+        voyages 的行不会被删除，航次从 vesselinfo 下架后只是 last_seen_at 不再前进；
+        拿它和这个水位线比，就能判断某个航次是否还在最新的在册目录里。
+        """
+        row = self.conn.execute("SELECT MAX(last_seen_at) FROM voyages").fetchone()
+        return row[0] if row else None
+
+    def note_gate_events_seen(
+        self, vesselcode: str, voyage: str, *, newest: str, had_new: bool,
+        inactive_rounds: int, retire_ok: bool,
+    ) -> bool:
+        """记录一轮增量对某航次的观察结果，返回该航次是否因此转为 inactive。
+
+        有新报文 → 清零 idle_rounds；没有 → 累加，攒够 inactive_rounds 轮
+        且该航次已离开 npp 在册目录（retire_ok）才退休 —— 只看轮数会把
+        还在装货、只是这几轮恰好没动静的航次误退。
+        """
+        if had_new:
+            self.conn.execute(
+                "UPDATE gate_voyages SET idle_rounds=0, "
+                "last_event_at=MAX(COALESCE(last_event_at, ''), ?) "
+                "WHERE vesselcode=? AND voyage=?",
+                (newest, vesselcode, voyage),
+            )
+            self.conn.commit()
+            return False
+
+        row = self.conn.execute(
+            "SELECT idle_rounds FROM gate_voyages WHERE vesselcode=? AND voyage=?",
+            (vesselcode, voyage),
+        ).fetchone()
+        rounds = int(row["idle_rounds"] if row else 0) + 1
+        retire = retire_ok and rounds >= inactive_rounds
+        self.conn.execute(
+            "UPDATE gate_voyages SET idle_rounds=?, inactive=? WHERE vesselcode=? AND voyage=?",
+            (rounds, 1 if retire else 0, vesselcode, voyage),
+        )
+        self.conn.commit()
+        return retire
+
+    # ------------------------------------------------------- 进出门：报文入库
+
+    def insert_gate_events(
+        self, rows: Iterable[dict], run_id: int, *,
+        direction: str, vesselcode: str, voyage: str, verify_dup: bool = False,
+    ) -> dict[str, int]:
+        """按 id 追加入库，返回 seen/new/dup/skipped/conflict 计数。
+
+        报文不可变，所以只有 INSERT OR IGNORE 一条路径：id 已存在即跳过。
+        verify_dup=True 时额外核对重复行的内容（增量轮量小才值得），
+        真出现同 id 内容不同就记 warning —— 那说明"报文不可变"这个前提破了。
+        """
+        stats = {"seen": 0, "new": 0, "dup": 0, "skipped": 0, "conflict": 0}
+        ts = now_iso()
+        cur = self.conn.cursor()
+
+        for row in rows:
+            stats["seen"] += 1
+            rid = _norm(row.get("id"))
+            if not rid:
+                stats["skipped"] += 1
+                continue
+
+            values = {f: _norm(row.get(f)) for f in GATE_ROW_FIELDS}
+            values["id"] = rid
+            values["type"] = direction
+            values["vesselcode"] = vesselcode
+            values["voyage"] = values["voyage"] or voyage
+            extra = {
+                k: v for k, v in row.items()
+                if k.lower() not in GATE_KNOWN_KEYS and v not in (None, "")
+            }
+            raw_json = json.dumps(extra, sort_keys=True, ensure_ascii=False) if extra else ""
+
+            cur.execute(
+                f"INSERT OR IGNORE INTO gate_events({_GATE_COLS}, raw_json, run_id, fetched_at) "
+                f"VALUES({_GATE_PLACEHOLDERS}, ?, ?, ?)",
+                (*(values[f] for f in GATE_FIELDS), raw_json, run_id, ts),
+            )
+            if cur.rowcount:
+                stats["new"] += 1
+                continue
+
+            stats["dup"] += 1
+            if verify_dup:
+                old = cur.execute("SELECT * FROM gate_events WHERE id=?", (rid,)).fetchone()
+                diff = [f for f in GATE_COMPARE_FIELDS if _norm(old[f]) != values[f]]
+                if diff:
+                    stats["conflict"] += 1
+                    log.warning("报文 %s 的内容发生了变化（本应不可变）：%s", rid, ", ".join(diff))
+
+        self.conn.commit()
+        return stats
+
+    # ------------------------------------------------------- 进出门：查询与导出
+
+    def gate_counts(self) -> dict[str, int]:
+        q = lambda sql: int(self.conn.execute(sql).fetchone()[0])  # noqa: E731
+        return {
+            "voyages": q("SELECT COUNT(*) FROM gate_voyages"),
+            "voyages_done": q(
+                "SELECT COUNT(*) FROM gate_voyages "
+                "WHERE gatein_done_at IS NOT NULL AND gateout_done_at IS NOT NULL"
+            ),
+            "voyages_inactive": q("SELECT COUNT(*) FROM gate_voyages WHERE inactive=1"),
+            "events": q("SELECT COUNT(*) FROM gate_events"),
+            "events_in": q("SELECT COUNT(*) FROM gate_events WHERE \"type\"='GATE_IN'"),
+            "events_out": q("SELECT COUNT(*) FROM gate_events WHERE \"type\"='GATE_OUT'"),
+        }
+
+    def gate_event_time_range(self) -> tuple[str | None, str | None]:
+        row = self.conn.execute(
+            'SELECT MIN("msgReceiveTime"), MAX("msgReceiveTime") FROM gate_events '
+            'WHERE TRIM(COALESCE("msgReceiveTime", \'\')) <> \'\''
+        ).fetchone()
+        return (row[0], row[1]) if row else (None, None)
+
+    def gate_run_event_count(self, run_id: int) -> int:
+        return int(self.conn.execute(
+            "SELECT COUNT(*) FROM gate_events WHERE run_id=?", (run_id,)
+        ).fetchone()[0])
+
+    def iter_gate_events(self, *, active_only: bool = False) -> Iterable[sqlite3.Row]:
+        sql = f'SELECT {_GATE_COLS}, fetched_at FROM gate_events'
+        if active_only:
+            sql += (
+                " WHERE (vesselcode, voyage) IN "
+                "(SELECT vesselcode, voyage FROM gate_voyages WHERE inactive=0)"
+            )
+        sql += ' ORDER BY vesselcode, voyage, "msgReceiveTime"'
+        yield from self.conn.execute(sql)
+
+    def iter_gate_run_events(self, run_id: int) -> Iterable[sqlite3.Row]:
+        yield from self.conn.execute(
+            f'SELECT {_GATE_COLS}, fetched_at FROM gate_events WHERE run_id=? '
+            'ORDER BY vesselcode, voyage, "msgReceiveTime"',
+            (run_id,),
+        )
+
+    def iter_gate_voyages(self) -> Iterable[sqlite3.Row]:
+        yield from self.conn.execute(
+            "SELECT vesselcode, voyage, vesselename, first_seen_at, last_seen_at, last_event_at, "
+            "gatein_done_at, gatein_total, gateout_done_at, gateout_total, idle_rounds, inactive "
+            "FROM gate_voyages ORDER BY COALESCE(last_event_at, '') DESC, vesselcode, voyage"
+        )
+
+    def iter_gate_gap(self) -> Iterable[sqlite3.Row]:
+        """闸口有报文、npp 核放库里却查不到的箱子（ARCHITECTURE-GATE.md §5）。"""
+        yield from self.conn.execute(
+            "SELECT * FROM v_gate_vs_npp WHERE npp_id IS NULL "
+            'ORDER BY vesselcode, voyage, "ctnNo"'
+        )
+
+    def gate_gap_summary(self) -> dict[str, int]:
+        q = lambda sql: int(self.conn.execute(sql).fetchone()[0])  # noqa: E731
+        return {
+            "gate_events": q("SELECT COUNT(*) FROM v_gate_vs_npp"),
+            "matched": q("SELECT COUNT(*) FROM v_gate_vs_npp WHERE npp_id IS NOT NULL"),
+            "gap": q("SELECT COUNT(*) FROM v_gate_vs_npp WHERE npp_id IS NULL"),
+            "gap_voyages": q(
+                "SELECT COUNT(*) FROM (SELECT DISTINCT vesselcode, voyage "
+                "FROM v_gate_vs_npp WHERE npp_id IS NULL)"
+            ),
+        }

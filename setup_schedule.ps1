@@ -11,6 +11,11 @@ param(
     [string[]]$Times = @("07:30", "12:30", "19:30"),
     [string]$ReconcileTime = "22:30",
     [string]$ReconcileDay = "Sunday",
+    # 进出门增量排在当天最后一轮 npp 增量之后（它依赖 npp 目录判断航次死活），
+    # 回填放后半夜，一晚跑一段请求预算，连着几晚把历史铺完
+    [string]$GateTime = "20:30",
+    [string]$GateBackfillTime = "00:30",
+    [switch]$NoGate,
     [string]$TaskPrefix = "npedi",
     [string]$Python = ""
 )
@@ -54,7 +59,24 @@ $weekly = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $ReconcileDay -At $Reconc
 Register-NpediTask -Name "$TaskPrefix-reconcile" -Command "reconcile" `
     -Triggers $weekly -Description "npedi 活跃航次全量对账（每周$ReconcileDay $ReconcileTime）"
 
+$tasks = @("$TaskPrefix-incremental", "$TaskPrefix-reconcile")
+
+if (-not $NoGate) {
+    # 进出门增量：每天一次即可 —— 闸口报文的时效要求没有核放状态高，
+    # 而降级路径下每轮上千次请求也不便宜
+    Register-NpediTask -Name "$TaskPrefix-gate" -Command "gate-incremental" `
+        -Triggers (New-ScheduledTaskTrigger -Daily -At $GateTime) `
+        -Description "npedi 进出门报文增量（每日 $GateTime）"
+
+    # 历史回填：每晚跑一段请求预算就停，靠断点连着几晚铺完约 2.8 万个航次×方向
+    Register-NpediTask -Name "$TaskPrefix-gate-backfill" -Command "gate-backfill" `
+        -Triggers (New-ScheduledTaskTrigger -Daily -At $GateBackfillTime) `
+        -Description "npedi 进出门历史回填（每晚 $GateBackfillTime 跑一段预算）"
+
+    $tasks += @("$TaskPrefix-gate", "$TaskPrefix-gate-backfill")
+}
+
 Write-Host ""
 Write-Host "完成。查看： Get-ScheduledTask -TaskName '$TaskPrefix-*'"
 Write-Host "手动试跑： Start-ScheduledTask -TaskName '$TaskPrefix-incremental'"
-Write-Host "删除任务： Unregister-ScheduledTask -TaskName '$TaskPrefix-incremental','$TaskPrefix-reconcile' -Confirm:`$false"
+Write-Host "删除任务： Unregister-ScheduledTask -TaskName $(($tasks | ForEach-Object { ""'$_'"" }) -join ',') -Confirm:`$false"

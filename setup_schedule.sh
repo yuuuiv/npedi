@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# 注册 Linux 定时任务：每天早/中/晚各跑一轮增量，每周一次对账。
+# 注册 Linux 定时任务：npp 每天早/中/晚各一轮增量 + 每周一次对账，
+# 进出门每天一轮增量（20:30）+ 每晚一段历史回填（00:30）。
 # 与 Windows 上的 setup_schedule.ps1 一一对应。
 #
 #   ./setup_schedule.sh                      # 装 cron（默认）
 #   ./setup_schedule.sh --systemd            # 装 systemd user timer
 #   ./setup_schedule.sh --times 08:00,13:00,20:00
+#   ./setup_schedule.sh --no-gate            # 只装 npp 管线，不装进出门
 #   ./setup_schedule.sh --remove             # 卸载（cron 与 systemd 都清）
 #
 # 重复执行会覆盖同名任务，不会叠加。
@@ -16,6 +18,11 @@ MODE="cron"
 TIMES="07:30,12:30,19:30"
 RECONCILE_TIME="22:30"
 RECONCILE_DAY="Sun"          # cron: 0/Sun；systemd: Sun
+# 进出门管线：增量排在当天最后一轮 npp 增量之后（它依赖 npp 目录判断航次死活），
+# 回填放在后半夜，一晚跑一段请求预算，连着几晚把历史铺完。
+GATE_TIME="20:30"
+GATE_BACKFILL_TIME="00:30"
+WITH_GATE=1
 MARKER="# npedi-sync"        # crontab 里认领自己那几行用的标记
 
 while [ $# -gt 0 ]; do
@@ -26,6 +33,9 @@ while [ $# -gt 0 ]; do
         --times)   TIMES="$2"; shift ;;
         --reconcile-time) RECONCILE_TIME="$2"; shift ;;
         --reconcile-day)  RECONCILE_DAY="$2"; shift ;;
+        --gate-time) GATE_TIME="$2"; shift ;;
+        --gate-backfill-time) GATE_BACKFILL_TIME="$2"; shift ;;
+        --no-gate) WITH_GATE=0 ;;
         --python)  PYTHON="$2"; shift ;;
         *) echo "未知参数：$1" >&2; exit 2 ;;
     esac
@@ -61,6 +71,13 @@ install_cron() {
     hour="${RECONCILE_TIME%%:*}"; min="${RECONCILE_TIME##*:}"
     lines+="${min#0} ${hour#0} * * $RECONCILE_DAY cd $ROOT && NPEDI_PYTHON=$PYTHON ./run_sync.sh reconcile >> $ROOT/logs/cron.log 2>&1 $MARKER"$'\n'
 
+    if [ "$WITH_GATE" = "1" ]; then
+        hour="${GATE_TIME%%:*}"; min="${GATE_TIME##*:}"
+        lines+="${min#0} ${hour#0} * * * cd $ROOT && NPEDI_PYTHON=$PYTHON ./run_sync.sh gate-incremental >> $ROOT/logs/cron.log 2>&1 $MARKER"$'\n'
+        hour="${GATE_BACKFILL_TIME%%:*}"; min="${GATE_BACKFILL_TIME##*:}"
+        lines+="${min#0} ${hour#0} * * * cd $ROOT && NPEDI_PYTHON=$PYTHON ./run_sync.sh gate-backfill >> $ROOT/logs/cron.log 2>&1 $MARKER"$'\n'
+    fi
+
     { crontab -l 2>/dev/null || true; printf '%s' "$lines"; } | crontab -
     echo "  已写入 crontab："
     crontab -l | grep "$MARKER" | sed 's/^/    /'
@@ -77,7 +94,7 @@ UNIT_DIR="$HOME/.config/systemd/user"
 remove_systemd() {
     command -v systemctl >/dev/null 2>&1 || return 0
     local u
-    for u in npedi-incremental npedi-reconcile; do
+    for u in npedi-incremental npedi-reconcile npedi-gate npedi-gate-backfill; do
         systemctl --user disable --now "$u.timer" 2>/dev/null || true
         rm -f "$UNIT_DIR/$u.timer" "$UNIT_DIR/$u.service"
     done
@@ -128,6 +145,12 @@ install_systemd() {
     write_unit npedi-incremental incremental "$oncal" "npedi 航次数据增量同步"
     write_unit npedi-reconcile reconcile \
         "OnCalendar=$RECONCILE_DAY *-*-* ${RECONCILE_TIME}:00" "npedi 活跃航次全量对账"
+    if [ "$WITH_GATE" = "1" ]; then
+        write_unit npedi-gate gate-incremental \
+            "OnCalendar=*-*-* ${GATE_TIME}:00" "npedi 进出门报文增量"
+        write_unit npedi-gate-backfill gate-backfill \
+            "OnCalendar=*-*-* ${GATE_BACKFILL_TIME}:00" "npedi 进出门历史回填（每晚一段预算）"
+    fi
 
     systemctl --user daemon-reload
     echo

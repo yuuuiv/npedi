@@ -73,6 +73,10 @@ class Config:
     log_dir: Path = BASE_DIR / "logs"
     alert_file: Path = BASE_DIR / "ALERT_TOKEN_EXPIRED"
     lock_file: Path = BASE_DIR / ".sync.lock"
+    # 进出门管线用独立的锁：一次跑满的历史回填要占十几到二十几小时，
+    # 共用一把锁的话这段时间里 npp 的每日增量会全部被挡在门外。
+    # 两边写的是不同的表，SQLite 开着 WAL，并发写靠 busy_timeout 排队。
+    gate_lock_file: Path = BASE_DIR / ".sync.gate.lock"
 
     # --- 网络行为 ---
     timeout_seconds: float = 60.0
@@ -96,6 +100,14 @@ class Config:
 
     # --- 兜底策略（§5 安全网 2），auto 表示按 probe 结果决定 ---
     empty_compare_fallback: str = "auto"       # auto | on | off
+
+    # --- 进出门管线（ARCHITECTURE-GATE.md §7）---
+    gate_page_size: int = 100
+    gate_backfill_max_requests: int = 5000     # 每次回填运行的请求预算，跑完即停（0=不限）
+    gate_inactive_rounds: int = 6              # 连续无新增 N 轮且已离开 npp 目录 → 退出活跃集合
+    gate_active_days: int = 14                 # 不在 npp 目录里的航次，最近多少天有报文才算活跃
+    gate_new_voyage_limit: int = 200           # 增量轮里最多顺带回填多少个新航次×方向
+    gate_export_scope: str = "all"             # all | active | off，全量快照可能有数百万行
 
     # --- CSV 输出 ---
     csv_timestamp_format: str = "iso"  # iso: 20260727103201 → 2026-07-27 10:32:01；raw: 原样
@@ -173,6 +185,12 @@ def load_config(env_path: Path | None = None) -> Config:
         max_new_voyage_backfill_per_run=_int("MAX_NEW_VOYAGE_BACKFILL_PER_RUN", 50),
         reconcile_max_voyages=_int("RECONCILE_MAX_VOYAGES", 200),
         empty_compare_fallback=_get(env, "EMPTY_COMPARE_FALLBACK", "auto").lower(),
+        gate_page_size=_int("GATE_PAGE_SIZE", 100),
+        gate_backfill_max_requests=_int("GATE_BACKFILL_MAX_REQUESTS", 5000),
+        gate_inactive_rounds=_int("GATE_INCREMENTAL_INACTIVE_ROUNDS", 6),
+        gate_active_days=_int("GATE_ACTIVE_DAYS", 14),
+        gate_new_voyage_limit=_int("GATE_NEW_VOYAGE_LIMIT", 200),
+        gate_export_scope=_get(env, "GATE_EXPORT_SCOPE", "all").lower(),
         csv_timestamp_format=_get(env, "CSV_TIMESTAMP_FORMAT", "iso").lower(),
         csv_keep_change_files=_int("CSV_KEEP_CHANGE_FILES", 90),
         log_keep_run_files=_int("LOG_KEEP_RUN_FILES", 90),

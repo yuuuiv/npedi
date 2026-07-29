@@ -260,9 +260,9 @@ class Report:
         head(f"变更画像（{nhist} 条字段级变更记录）")
 
         print("  每轮的收成：")
-        print(f"    {'轮次':<6}{'类型':<13}{'开始时间':<21}"
+        print(f"    {'轮次':<6}{'类型':<18}{'开始时间':<21}"
               + "".join(f"{t:>9}" for t in ("新增", "变更", "空转", "未变", "请求")))
-        print("    " + "-" * 88)
+        print("    " + "-" * 93)
         # rows_touched 是后加的列，老库里可能还没有（analyze 只读，不做迁移）
         run_cols = {r[1] for r in self.conn.execute("PRAGMA table_info(sync_runs)")}
         touched = "COALESCE(rows_touched,0)" if "rows_touched" in run_cols else "0"
@@ -270,7 +270,7 @@ class Report:
                 f"SELECT run_id, kind, started_at, rows_new, rows_updated, {touched}, "
                 "rows_unchanged, requests_made "
                 "FROM sync_runs WHERE status='ok' ORDER BY run_id DESC LIMIT 15"):
-            print(f"    #{r[0]:<5}{r[1]:<13}{r[2]:<21}"
+            print(f"    #{r[0]:<5}{r[1]:<18}{r[2]:<21}"
                   + "".join(f"{v:>9}" for v in (r[3], r[4], r[5], r[6], r[7])))
 
         # 字段变更频率。json_each 把 {"字段": [旧,新]} 摊平成一行一个字段。

@@ -29,6 +29,12 @@ class ApiError(RuntimeError):
 # 服务端在 token 失效时不一定用 HTTP 401，也可能 200 + 业务码/文案，故做双重判断。
 _AUTH_MSG_PATTERN = ("未登录", "登录状态", "登录已过期", "认证失败", "无效的会话", "token", "令牌")
 
+# 进出门查询的 type 参数：库里存短名，请求时换成接口要的全称（注意中间有空格）
+GATE_QUERY_TYPES = {
+    "GATE_IN": "GATE_IN REPORT",
+    "GATE_OUT": "GATE_OUT REPORT",
+}
+
 
 class NpediClient:
     def __init__(self, cfg: Config):
@@ -179,6 +185,66 @@ class NpediClient:
                 voyage=voyage,
                 compare_time=compare_time,
                 compare_flag=compare_flag,
+            )
+            rows = data.get("list") or []
+            total = int(data.get("total") or 0)
+            yield page, total, rows
+
+            fetched += len(rows)
+            if not rows or fetched >= total:
+                return
+            if page >= self.cfg.max_pages_per_query:
+                log.warning("翻页达到上限 %d（total=%d），提前停止", self.cfg.max_pages_per_query, total)
+                return
+            page += 1
+
+
+    # -------------------------------------------------- 进出门（ARCHITECTURE-GATE.md §1）
+
+    def vessel_list(self) -> list[dict]:
+        """进出门查询用的航次目录，无分页无参数（1 次请求，实测 14337 条）。"""
+        data = self._get("/voyage/vesselList").get("data") or []
+        return [row for row in data if isinstance(row, dict)]
+
+    def scodeco_page(
+        self,
+        page: int,
+        *,
+        direction: str,
+        vessel_code: str,
+        voyage: str,
+        page_size: int | None = None,
+    ) -> dict:
+        """进出门报文的单页。
+
+        voyage 必须是 vesselList 返回的原值：实测手输 `071EJ` 恒返回 0 条，
+        改成目录里的 `071E` 才有 1320 条，服务端做的是精确匹配。
+        """
+        params = {
+            "type": GATE_QUERY_TYPES[direction],
+            "pageNum": page,
+            "pageSize": page_size or self.cfg.gate_page_size,
+            "voyage": voyage,
+            "vesselCode": vessel_code,
+            "ctnOperatorCode": "",
+            "ctnNo": "",
+            "blNo": "",
+        }
+        return self._get("/scodeco/list", params).get("data") or {}
+
+    def iter_scodeco(
+        self, *, direction: str, vessel_code: str, voyage: str,
+    ) -> Iterator[tuple[int, int, list[dict]]]:
+        """按页迭代进出门报文，产出 (页码, 总条数, 本页行)。
+
+        与 iter_integrated 一样以 total 为准算页数：实测 total=1320 时接口的
+        totalPages 返回 0，不可信。列表按 msgReceiveTime 降序，调用方可据此提前停。
+        """
+        page = 1
+        fetched = 0
+        while True:
+            data = self.scodeco_page(
+                page, direction=direction, vessel_code=vessel_code, voyage=voyage
             )
             rows = data.get("list") or []
             total = int(data.get("total") or 0)
