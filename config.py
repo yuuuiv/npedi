@@ -115,6 +115,7 @@ class Config:
 
     # --- 日志 ---
     log_keep_run_files: int = 90       # 保留最近多少个单轮日志 logs/runs/*.log，0 表示不清理
+    spi_weights: dict[str, float] = field(default_factory=lambda: {"vgm": .30, "cargo_release": .20, "transshipment": .15, "arrival_delay": .15, "departure_delay": .10, "plan_revision": .10})
 
     # 运行期填充：本轮的单轮日志文件名，写进 sync_runs.log_file 供 status 反查
     run_log_name: str = ""
@@ -194,5 +195,6 @@ def load_config(env_path: Path | None = None) -> Config:
         csv_timestamp_format=_get(env, "CSV_TIMESTAMP_FORMAT", "iso").lower(),
         csv_keep_change_files=_int("CSV_KEEP_CHANGE_FILES", 90),
         log_keep_run_files=_int("LOG_KEEP_RUN_FILES", 90),
+        spi_weights={"vgm": _num("SPI_VGM_WEIGHT", .30), "cargo_release": _num("SPI_RELEASE_WEIGHT", .20), "transshipment": _num("SPI_TRANSSHIPMENT_WEIGHT", .15), "arrival_delay": _num("SPI_ARRIVAL_DELAY_WEIGHT", .15), "departure_delay": _num("SPI_DEPARTURE_DELAY_WEIGHT", .10), "plan_revision": _num("SPI_PLAN_REVISION_WEIGHT", .10)},
     )
     return cfg

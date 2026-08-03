@@ -1,1 +1,7 @@
 httpx>=0.27
+scikit-learn>=1.4
+hdbscan>=0.8.33
+ruptures>=1.1.9
+plotly>=5.22
+alembic>=1.13
+SQLAlchemy>=2.0

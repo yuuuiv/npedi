@@ -1,7 +1,4 @@
-"""HTTP 客户端：认证、重试、限速、翻页（对应 ARCHITECTURE.md §1、§7）。
-
-只访问三个 JSON 接口，绝不请求 HTML/JS/CSS/图片，也不调用 searchcountAll。
-"""
+"""HTTP 客户端：认证、重试、限速、翻页。"""
 
 from __future__ import annotations
 
@@ -19,21 +16,15 @@ log = logging.getLogger("npedi.client")
 
 
 class AuthExpired(RuntimeError):
-    """token 失效 —— 必须立即停止本轮，绝不重试轰炸。"""
+    """token 失效，立即停止本轮。"""
 
 
 class ApiError(RuntimeError):
-    """接口返回了非鉴权类的错误。"""
+    """接口返回了非鉴权类错误。"""
 
 
-# 服务端在 token 失效时不一定用 HTTP 401，也可能 200 + 业务码/文案，故做双重判断。
 _AUTH_MSG_PATTERN = ("未登录", "登录状态", "登录已过期", "认证失败", "无效的会话", "token", "令牌")
-
-# 进出门查询的 type 参数：库里存短名，请求时换成接口要的全称（注意中间有空格）
-GATE_QUERY_TYPES = {
-    "GATE_IN": "GATE_IN REPORT",
-    "GATE_OUT": "GATE_OUT REPORT",
-}
+GATE_QUERY_TYPES = {"GATE_IN": "GATE_IN REPORT", "GATE_OUT": "GATE_OUT REPORT"}
 
 
 class NpediClient:
@@ -42,7 +33,7 @@ class NpediClient:
         self.request_count = 0
         self._last_request_at = 0.0
         if not cfg.token:
-            raise AuthExpired("配置中没有 token，请在 .env 里设置 WEB_TOKEN（见 README 取值步骤）")
+            raise AuthExpired("配置中没有 token，请在 .env 里设置 WEB_TOKEN")
         self._http = httpx.Client(
             base_url=cfg.api_base,
             timeout=cfg.timeout_seconds,
@@ -65,10 +56,37 @@ class NpediClient:
     def __exit__(self, *exc) -> None:
         self.close()
 
-    # ------------------------------------------------------------------ 内部
+    def get_json(self, path: str, params: dict | None = None) -> dict:
+        """Use the existing guarded GET path for timeseries crawlers."""
+        return self._get(path, params)
+
+    def vessel_plan_page(self, page: int, *, page_size: int, **filters: str) -> dict:
+        params = {
+            "vesselCnName": filters.get("vesselCnName", ""),
+            "vesselEnName": filters.get("vesselEnName", ""),
+            "voyage": filters.get("voyage", ""),
+            "etaBegin": filters.get("etaBegin", ""),
+            "etaEnd": filters.get("etaEnd", ""),
+            "terminal": filters.get("terminal", ""),
+            "page": page,
+            "pageSize": page_size,
+        }
+        return self._get("/vessel/plan/selectContainerDynamicPlan", params)
+
+    def container_notice_page(self, page: int, *, page_size: int, **filters: str) -> dict:
+        params = {
+            "pageNum": page,
+            "pageSize": page_size,
+            "voyage": filters.get("voyage", ""),
+            "vesselename": filters.get("vesselename", ""),
+            "vesselowner": filters.get("vesselowner", ""),
+            "vesselowner2": filters.get("vesselowner2", ""),
+            "matou": filters.get("matou", ""),
+            "ctnstart": filters.get("ctnstart", ""),
+        }
+        return self._get("/vessel/dzyjh/getlist", params)
 
     def _throttle(self) -> None:
-        """串行 + 随机延时：对方是口岸政务系统，务必温和。"""
         lo, hi = self.cfg.request_delay
         wait = random.uniform(lo, hi) - (time.monotonic() - self._last_request_at)
         if wait > 0:
@@ -83,182 +101,129 @@ class NpediClient:
                 resp = self._http.get(path, params=params)
                 self._last_request_at = time.monotonic()
                 self.request_count += 1
-            except httpx.TransportError as exc:  # 含超时：TimeoutException 是其子类
+            except httpx.TransportError as exc:
                 if attempt > self.cfg.max_retries:
                     raise ApiError(f"{path} 网络错误，重试 {self.cfg.max_retries} 次后仍失败: {exc}") from exc
                 backoff = 3 ** (attempt - 1)
-                log.warning("网络错误(%s)，%ss 后重试 %d/%d", exc, backoff, attempt, self.cfg.max_retries)
+                log.warning("网络错误，%ss 后重试 %d/%d", backoff, attempt, self.cfg.max_retries)
                 time.sleep(backoff)
                 continue
-
             if resp.status_code in (401, 403):
                 raise AuthExpired(f"{path} 返回 HTTP {resp.status_code}，token 已失效")
             if resp.status_code == 429 or resp.status_code >= 500:
                 if attempt > self.cfg.max_retries:
                     raise ApiError(f"{path} 返回 HTTP {resp.status_code}，重试后仍失败")
-                backoff = 3 ** (attempt - 1)
-                log.warning("HTTP %d，%ss 后重试 %d/%d", resp.status_code, backoff, attempt, self.cfg.max_retries)
-                time.sleep(backoff)
+                time.sleep(3 ** (attempt - 1))
                 continue
             if resp.status_code != 200:
                 raise ApiError(f"{path} 返回 HTTP {resp.status_code}: {resp.text[:200]}")
-
             try:
                 payload = resp.json()
             except ValueError as exc:
-                # 登录态失效时后端有可能吐回登录页 HTML 而非 JSON
                 snippet = resp.text[:200]
                 if "<html" in snippet.lower() or "login" in snippet.lower():
-                    raise AuthExpired(f"{path} 返回了非 JSON 内容，疑似登录态失效: {snippet!r}") from exc
-                raise ApiError(f"{path} 返回了非 JSON 内容: {snippet!r}") from exc
-
+                    raise AuthExpired(f"{path} 返回非 JSON，疑似登录态失效") from exc
+                raise ApiError(f"{path} 返回非 JSON: {snippet!r}") from exc
             code = payload.get("code")
             if code == 200:
                 return payload
             msg = str(payload.get("msg", ""))
             if code in (401, 403) or any(p in msg for p in _AUTH_MSG_PATTERN):
-                raise AuthExpired(f"{path} 返回 code={code} msg={msg!r}，token 已失效")
+                raise AuthExpired(f"{path} 返回 code={code}，token 已失效")
             raise ApiError(f"{path} 返回 code={code} msg={msg!r}")
 
-    # ------------------------------------------------------------------ 接口
+    def vgm_page(self, page: int, *, page_size: int, **filters: str) -> dict:
+        params = {"pageNum": page, "pageSize": page_size, "containerNumber": filters.get("containerNumber", ""), "vessel": filters.get("vessel", ""), "ctnOperatorCode": filters.get("ctnOperatorCode", ""), "senderCode": filters.get("senderCode", ""), "direct": filters.get("direct", ""), "containerType": filters.get("containerType", "")}
+        return self._get("/ctnvgm/getlist", params)
 
+    def cargo_release_page(self, page: int, *, page_size: int, **filters: str) -> dict:
+        params = {"val": filters.get("val", ""), "passno": filters.get("passno", ""), "billno": filters.get("billno", ""), "vesselcode": filters.get("vesselcode", ""), "voyage": filters.get("voyage", ""), "vesselAndVoyage": filters.get("vesselAndVoyage", ""), "pageNum": page, "pageSize": page_size}
+        return self._post("/ediCustptrSZ/getEdiCustptrSz", params)
+
+    def transshipment_page(self, page: int, *, page_size: int, **_: str) -> dict:
+        return self._get("/npp/nzx/getNzwPageResult", {"pageNum": page, "pageSize": page_size})
+
+    def container_history(self, container_no: str) -> dict:
+        return self._get(f"/ediContainerlog/getEdiContainerlog/{container_no}")
+
+    def _post(self, path: str, params: dict) -> dict:
+        attempt = 0
+        while True:
+            attempt += 1
+            self._throttle()
+            try:
+                resp = self._http.post(path, params=params)
+                self._last_request_at = time.monotonic()
+                self.request_count += 1
+            except httpx.TransportError as exc:
+                if attempt > self.cfg.max_retries:
+                    raise ApiError(f"{path} 网络错误，重试后仍失败: {exc}") from exc
+                time.sleep(3 ** (attempt - 1))
+                continue
+            if resp.status_code in (401, 403):
+                raise AuthExpired(f"{path} 返回 HTTP {resp.status_code}，token 已失效")
+            if resp.status_code == 429 or resp.status_code >= 500:
+                if attempt > self.cfg.max_retries:
+                    raise ApiError(f"{path} 返回 HTTP {resp.status_code}，重试后仍失败")
+                time.sleep(3 ** (attempt - 1))
+                continue
+            if resp.status_code != 200:
+                raise ApiError(f"{path} 返回 HTTP {resp.status_code}: {resp.text[:200]}")
+            try:
+                payload = resp.json()
+            except ValueError as exc:
+                raise ApiError(f"{path} 返回非 JSON") from exc
+            if payload.get("code") == 200:
+                return payload
+            msg = str(payload.get("msg", ""))
+            if payload.get("code") in (401, 403) or any(p in msg for p in _AUTH_MSG_PATTERN):
+                raise AuthExpired(f"{path} 返回 code={payload.get('code')}，token 已失效")
+            raise ApiError(f"{path} 返回 code={payload.get('code')} msg={msg!r}")
     def get_info(self) -> dict:
-        """轻量探活：能正常返回即说明 token 有效（1 次请求）。"""
         return self._get("/getInfo").get("data") or {}
 
     def vesselinfo(self) -> list[dict]:
-        """全部在册航次目录，无分页无参数（1 次请求）。"""
         data = self._get("/npp/search/vesselinfo").get("data") or []
         return [row for row in data if isinstance(row, dict)]
 
-    def integrated_page(
-        self,
-        page: int,
-        *,
-        unvessel: str = "",
-        voyage: str = "",
-        compare_time: str = "",
-        compare_flag: str = "",
-        page_size: int | None = None,
-    ) -> dict:
-        """集装箱明细的单页。参数顺序与站点前端一致，空值也照样发送。"""
-        params = {
-            "pageNum": page,
-            "pageSize": page_size or self.cfg.page_size,
-            "matou": "",
-            "agent": "",
-            "envessel": "",
-            "unvessel": unvessel,
-            "voyage": voyage,
-            "containerno": "",
-            "billno": "",
-            "compareTime": compare_time,
-            "passFlag": "",
-            "sendFlag": "",
-            "compareFlag": compare_flag,
-        }
+    def integrated_page(self, page: int, *, unvessel: str = "", voyage: str = "", compare_time: str = "", compare_flag: str = "", page_size: int | None = None) -> dict:
+        params = {"pageNum": page, "pageSize": page_size or self.cfg.page_size, "matou": "", "agent": "", "envessel": "", "unvessel": unvessel, "voyage": voyage, "containerno": "", "billno": "", "compareTime": compare_time, "passFlag": "", "sendFlag": "", "compareFlag": compare_flag}
         return self._get("/npp/search/integrated", params).get("data") or {}
 
-    def iter_integrated(
-        self,
-        *,
-        unvessel: str = "",
-        voyage: str = "",
-        compare_time: str = "",
-        compare_flag: str = "",
-        start_page: int = 1,
-    ) -> Iterator[tuple[int, int, list[dict]]]:
-        """按页迭代明细，产出 (页码, 总条数, 本页行)。
-
-        分页以 total 为准（样本中 totalPages 恒为 0，不可信），
-        并在返回空页 / 已取满 total 时提前结束。
-        start_page > 1 用于断点续爬，跳过的页不会发出请求；
-        已取行数按"之前各页均为满页"估算，仅对逐页完整抓完再中断的场景（backfill --resume）成立。
-        """
+    def iter_integrated(self, *, unvessel: str = "", voyage: str = "", compare_time: str = "", compare_flag: str = "", start_page: int = 1) -> Iterator[tuple[int, int, list[dict]]]:
         page = max(1, start_page)
-        fetched = (page - 1) * (self.cfg.page_size)
-        total = 0
+        fetched = (page - 1) * self.cfg.page_size
         while True:
-            data = self.integrated_page(
-                page,
-                unvessel=unvessel,
-                voyage=voyage,
-                compare_time=compare_time,
-                compare_flag=compare_flag,
-            )
+            data = self.integrated_page(page, unvessel=unvessel, voyage=voyage, compare_time=compare_time, compare_flag=compare_flag)
             rows = data.get("list") or []
             total = int(data.get("total") or 0)
             yield page, total, rows
-
             fetched += len(rows)
             if not rows or fetched >= total:
                 return
             if page >= self.cfg.max_pages_per_query:
-                log.warning("翻页达到上限 %d（total=%d），提前停止", self.cfg.max_pages_per_query, total)
                 return
             page += 1
 
-
-    # -------------------------------------------------- 进出门（ARCHITECTURE-GATE.md §1）
-
     def vessel_list(self) -> list[dict]:
-        """进出门查询用的航次目录，无分页无参数（1 次请求，实测 14337 条）。"""
         data = self._get("/voyage/vesselList").get("data") or []
         return [row for row in data if isinstance(row, dict)]
 
-    def scodeco_page(
-        self,
-        page: int,
-        *,
-        direction: str,
-        vessel_code: str,
-        voyage: str,
-        page_size: int | None = None,
-    ) -> dict:
-        """进出门报文的单页。
-
-        voyage 必须是 vesselList 返回的原值：实测手输 `071EJ` 恒返回 0 条，
-        改成目录里的 `071E` 才有 1320 条，服务端做的是精确匹配。
-        """
-        params = {
-            "type": GATE_QUERY_TYPES[direction],
-            "pageNum": page,
-            "pageSize": page_size or self.cfg.gate_page_size,
-            "voyage": voyage,
-            "vesselCode": vessel_code,
-            "ctnOperatorCode": "",
-            "ctnNo": "",
-            "blNo": "",
-        }
+    def scodeco_page(self, page: int, *, direction: str, vessel_code: str, voyage: str, page_size: int | None = None) -> dict:
+        params = {"type": GATE_QUERY_TYPES[direction], "pageNum": page, "pageSize": page_size or self.cfg.gate_page_size, "voyage": voyage, "vesselCode": vessel_code, "ctnOperatorCode": "", "ctnNo": "", "blNo": ""}
         return self._get("/scodeco/list", params).get("data") or {}
 
-    def iter_scodeco(
-        self, *, direction: str, vessel_code: str, voyage: str,
-    ) -> Iterator[tuple[int, int, list[dict]]]:
-        """按页迭代进出门报文，产出 (页码, 总条数, 本页行)。
-
-        与 iter_integrated 一样以 total 为准算页数：实测 total=1320 时接口的
-        totalPages 返回 0，不可信。列表按 msgReceiveTime 降序，调用方可据此提前停。
-        """
-        page = 1
-        fetched = 0
+    def iter_scodeco(self, *, direction: str, vessel_code: str, voyage: str) -> Iterator[tuple[int, int, list[dict]]]:
+        page, fetched = 1, 0
         while True:
-            data = self.scodeco_page(
-                page, direction=direction, vessel_code=vessel_code, voyage=voyage
-            )
-            rows = data.get("list") or []
-            total = int(data.get("total") or 0)
+            data = self.scodeco_page(page, direction=direction, vessel_code=vessel_code, voyage=voyage)
+            rows, total = data.get("list") or [], int(data.get("total") or 0)
             yield page, total, rows
-
             fetched += len(rows)
-            if not rows or fetched >= total:
-                return
-            if page >= self.cfg.max_pages_per_query:
-                log.warning("翻页达到上限 %d（total=%d），提前停止", self.cfg.max_pages_per_query, total)
+            if not rows or fetched >= total or page >= self.cfg.max_pages_per_query:
                 return
             page += 1
 
 
 def fmt_compare_window(start: datetime, end: datetime) -> str:
-    """→ `20260721110833,20260729110833`"""
     return f"{start:%Y%m%d%H%M%S},{end:%Y%m%d%H%M%S}"

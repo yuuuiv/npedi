@@ -1,0 +1,1 @@
+{"code":200,"msg":"操作成功","data":{"page":2,"pageSize":2,"total":3,"totalPages":0,"list":[{"vesselUnCode":"UN0000003","vesselEnName":"THIRD","voyage":"V003","terminal":"T3","vesselDirect":"E","eta":"20260806100000"}]}}
