@@ -28,7 +28,7 @@ class GoldTests(unittest.TestCase):
         with TimeseriesStore(self.db) as store:
             VesselPlanCrawler(PlanClient(), store, self.cfg).crawl()
             facts = FactClient()
-            VgmCrawler(facts, store, self.cfg).crawl({"vessels": ["UN0000001"]})
+            VgmCrawler(facts, store, self.cfg).crawl({"container_nos": ["ABCU1234567"]})
             CargoReleaseCrawler(facts, store, self.cfg).crawl()
             TransshipmentCrawler(facts, store, self.cfg).crawl()
             counts = rebuild_gold(store)

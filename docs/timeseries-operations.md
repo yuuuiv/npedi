@@ -24,3 +24,14 @@ python -c "from config import load_config; from timeseries import run_phase1; pr
 ## 迁移
 
 `TimeseriesStore` 启动时按文件名应用 `migrations/*.sql`，由 `schema_migration` 记录已应用迁移；现有 `voyages`、`containers` 和 `gate_events` 表不重建。
+
+## VGM 采集
+
+VGM 实际按箱号调用 `/ctnvgm/getlist`。运行时优先读取 `container_enrichment_queue`，为空时回退到旧库 `containers.containerno`：
+
+```powershell
+python npedi.py crawl vgm --limit 500 --offset 0 --resume
+python npedi.py crawl vgm --limit 500 --offset 500 --resume
+```
+
+`--limit/--offset` 是箱号批次；每个箱号使用独立 checkpoint，单个 HTTP 400 会记录到 `ingest_error` 并使本轮标记为 `partial`，后续箱号继续处理。船舶参数探测返回 400，因此不再使用计划表 `vessel_code` 作为 VGM 查询参数。

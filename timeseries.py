@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from client import AuthExpired, NpediClient
+from client import ApiError, AuthExpired, NpediClient
 from config import Config
 
 ROOT = Path(__file__).resolve().parent
@@ -244,7 +244,12 @@ class BaseCrawler:
                 page = int(checkpoint["next_page"]) if resume and checkpoint else 1
                 page_hashes: list[str] = []
                 while page <= self.config.max_pages_per_query:
-                    response = self.fetch_page(request, page)
+                    try:
+                        response = self.fetch_page(request, page)
+                    except ApiError as exc:
+                        stats["errors"] += 1
+                        self.store.error(run_id, self.endpoint_name, "request", str(exc), {"partition": request.partition_key, "page": page, "filters": request.filters})
+                        break
                     stats["requests"] += 1
                     stats["raw"] += int(self.store.raw_page(run_id, self.endpoint_name, request, page, response))
                     rows = self.extract_rows(response)

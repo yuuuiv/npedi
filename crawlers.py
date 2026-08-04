@@ -33,10 +33,11 @@ class VgmCrawler(FactCrawler):
     fact_fields = ("business_key_hash","container_no","vessel_code","vessel_name_raw","voyage","terminal_code","operator_code","direction","container_type","vgm_weight_kg","vgm_method","operator_time","terminal_received_time","result_code","result_description","sender_code","receiver_code","ingested_at","record_hash","raw_json")
 
     def build_requests(self, context: dict[str, Any]) -> Iterable[RequestSpec]:
-        for item in context.get("vessels", []):
-            vessel = item if isinstance(item, str) else item.get("vesselUnCode")
-            if vessel:
-                yield RequestSpec(f"vessel:{vessel}", {"vessel": vessel}, context.get("page_size", self.config.page_size))
+        for item in context.get("container_nos", []):
+            container_no = clean(item)
+            if container_no:
+                # The live endpoint accepts containerNumber; vessel filters returned HTTP 400.
+                yield RequestSpec(f"container:{container_no}", {"containerNumber": container_no}, 1)
 
     def fetch_page(self, request: RequestSpec, page: int) -> dict[str, Any]:
         return self.client.vgm_page(page, page_size=request.page_size, **request.filters)

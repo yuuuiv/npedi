@@ -13,7 +13,11 @@ FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "core_facts.json").re
 
 
 class FactClient:
+    def __init__(self):
+        self.vgm_filters = []
+
     def vgm_page(self, page, *, page_size, **filters):
+        self.vgm_filters.append(filters)
         return FIXTURE["vgm"]
 
     def cargo_release_page(self, page, *, page_size, **filters):
@@ -38,10 +42,11 @@ class FactTests(unittest.TestCase):
 
     def test_facts_are_normalized_and_idempotent(self):
         with TimeseriesStore(self.db) as store:
-            self.assertEqual(VgmCrawler(self.client, store, self.cfg).crawl({"vessels": ["UN0000001"]})["inserted"], 1)
+            self.assertEqual(VgmCrawler(self.client, store, self.cfg).crawl({"container_nos": ["ABCU1234567"]})["inserted"], 1)
+            self.assertEqual(self.client.vgm_filters[0], {"containerNumber": "ABCU1234567"})
             self.assertEqual(CargoReleaseCrawler(self.client, store, self.cfg).crawl()["inserted"], 1)
             self.assertEqual(TransshipmentCrawler(self.client, store, self.cfg).crawl()["inserted"], 1)
-            second = VgmCrawler(self.client, store, self.cfg).crawl({"vessels": ["UN0000001"]})
+            second = VgmCrawler(self.client, store, self.cfg).crawl({"container_nos": ["ABCU1234567"]})
             self.assertEqual(second["inserted"], 0)
             self.assertIsNone(store.conn.execute("SELECT gross_weight FROM fact_cargo_release").fetchone()[0])
             self.assertEqual(store.conn.execute("SELECT COUNT(*) FROM container_enrichment_queue").fetchone()[0], 1)

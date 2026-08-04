@@ -28,6 +28,7 @@ def parser() -> argparse.ArgumentParser:
     crawl.add_argument("--mode", default="incremental")
     crawl.add_argument("--resume", action="store_true")
     crawl.add_argument("--limit", type=int, default=500)
+    crawl.add_argument("--offset", type=int, default=0)
     for name in ("normalize", "aggregate", "build-curves", "quality-report", "render"):
         sub.add_parser(name)
     cluster = sub.add_parser("cluster")
@@ -52,6 +53,23 @@ def _dry(args: argparse.Namespace, cfg: Config) -> bool:
     return args.dry_run
 
 
+def _vgm_container_batch(store: TimeseriesStore, limit: int, offset: int) -> tuple[str, list[str]]:
+    limit, offset = max(1, limit), max(0, offset)
+    tables = {r[0] for r in store.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "container_enrichment_queue" in tables:
+        rows = store.conn.execute("""SELECT container_no FROM container_enrichment_queue
+            WHERE container_no IS NOT NULL AND TRIM(container_no)<>''
+            ORDER BY first_seen_at, container_no LIMIT ? OFFSET ?""", (limit, offset)).fetchall()
+        if rows:
+            return "container_enrichment_queue", [r[0] for r in rows]
+    if "containers" in tables:
+        rows = store.conn.execute("""SELECT DISTINCT TRIM(containerno) FROM containers
+            WHERE containerno IS NOT NULL AND TRIM(containerno)<>''
+            ORDER BY TRIM(containerno) LIMIT ? OFFSET ?""", (limit, offset)).fetchall()
+        return "containers", [r[0] for r in rows]
+    return "none", []
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.INFO))
@@ -65,7 +83,10 @@ def main(argv: list[str] | None = None) -> int:
                 crawler = runners[args.target](client, store, cfg)
                 context = {}
                 if args.target == "vgm":
-                    context["vessels"] = [r[0] for r in store.conn.execute("SELECT DISTINCT vessel_code FROM fact_vessel_plan_snapshot WHERE vessel_code IS NOT NULL")]
+                    source, container_nos = _vgm_container_batch(store, args.limit, args.offset)
+                    context.update({"container_nos": container_nos, "container_source": source, "offset": args.offset})
+                    if not container_nos:
+                        logging.getLogger("npedi").warning("没有可用于 VGM 查询的箱号；先运行 transshipment，或确认旧 containers 表已存在")
                 elif args.target == "container-history":
                     context["container_nos"] = [r[0] for r in store.conn.execute("SELECT container_no FROM container_enrichment_queue WHERE status='pending' LIMIT ?", (args.limit,))]
                 print(json.dumps(crawler.crawl(context, resume=args.resume), ensure_ascii=False))

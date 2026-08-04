@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 
-from client import AuthExpired, NpediClient
+from client import ApiError, AuthExpired, NpediClient
 from config import Config
 from normalize import classify_cargo
 from timeseries import BaseCrawler, RequestSpec, TimeseriesStore, parse_number, parse_time
@@ -19,6 +19,18 @@ class RepeatClient:
 
 class TinyCrawler(BaseCrawler):
     endpoint_name = "repeat_fixture"
+
+    def fetch_page(self, request: RequestSpec, page: int):
+        return self.client.vessel_plan_page(page, page_size=request.page_size)
+
+
+class RequestErrorClient:
+    def vessel_plan_page(self, page, *, page_size, **filters):
+        raise ApiError("fixture HTTP 400")
+
+
+class RequestErrorCrawler(BaseCrawler):
+    endpoint_name = "request_error_fixture"
 
     def fetch_page(self, request: RequestSpec, page: int):
         return self.client.vessel_plan_page(page, page_size=request.page_size)
@@ -43,6 +55,16 @@ class ContractTests(unittest.TestCase):
                 result = TinyCrawler(RepeatClient(), store, cfg).crawl()
                 self.assertEqual(result["errors"], 1)
                 self.assertEqual(store.conn.execute("SELECT COUNT(*) FROM ingest_error WHERE stage='pagination'").fetchone()[0], 1)
+
+    def test_api_error_is_recorded_as_partial_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "request-error.sqlite"
+            cfg = Config(token="fixture", db_path=db, page_size=1, request_delay=(0, 0), max_pages_per_query=5)
+            with TimeseriesStore(db) as store:
+                result = RequestErrorCrawler(RequestErrorClient(), store, cfg).crawl()
+                self.assertEqual(result["status"], "partial")
+                self.assertEqual(result["errors"], 1)
+                self.assertEqual(store.conn.execute("SELECT COUNT(*) FROM ingest_error WHERE stage='request'").fetchone()[0], 1)
 
     def test_parser_and_cargo_rule_contracts(self):
         self.assertEqual(parse_number(" 12.5 "), 12.5)
