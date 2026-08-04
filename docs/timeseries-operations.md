@@ -32,6 +32,22 @@ VGM 实际按箱号调用 `/ctnvgm/getlist`。运行时优先读取 `container_e
 ```powershell
 python npedi.py crawl vgm --limit 500 --offset 0 --resume
 python npedi.py crawl vgm --limit 500 --offset 500 --resume
+python npedi.py crawl container-history --limit 500 --offset 0 --resume
+python npedi.py crawl container-history --limit 500 --offset 500 --resume
 ```
 
 `--limit/--offset` 是箱号批次；每个箱号使用独立 checkpoint，单个 HTTP 400 会记录到 `ingest_error` 并使本轮标记为 `partial`，后续箱号继续处理。船舶参数探测返回 400，因此不再使用计划表 `vessel_code` 作为 VGM 查询参数。
+
+container history 使用相同的箱号队列和固定排序。队列超过一个批次时，继续增加 offset；中断后使用相同 offset 和 `--resume` 重试。
+
+## As-of 回测聚类
+
+先按观测时间重建历史 Gold，再生成对应曲线和聚类：
+
+```powershell
+python npedi.py aggregate --as-of 2026-08-01T23:59:59+00:00
+python npedi.py build-curves --as-of 2026-08-01T23:59:59+00:00
+python npedi.py cluster --entity terminal --curve-type vgm --algorithm hierarchical --as-of 2026-08-01T23:59:59+00:00
+```
+
+`--as-of` 使用采集观测时间，避免把后来才采集到的事实提前泄露到历史窗口。迁移 003 后，VGM、cargo release、transshipment 和 container history 的每次变化都会追加到 `fact_record_version`。

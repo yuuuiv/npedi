@@ -14,6 +14,12 @@ from client import ApiError, AuthExpired, NpediClient
 from config import Config
 
 ROOT = Path(__file__).resolve().parent
+VERSIONED_FACT_TABLES = frozenset({
+    "fact_container_vgm",
+    "fact_cargo_release",
+    "fact_transshipment",
+    "fact_container_event",
+})
 
 
 def now_utc() -> str:
@@ -78,6 +84,7 @@ class TimeseriesStore:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.apply_migrations(migration_dir)
+        self._bootstrap_fact_versions()
 
     def apply_migrations(self, migration_dir: Path) -> None:
         self.conn.execute("CREATE TABLE IF NOT EXISTS schema_migration (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
@@ -90,6 +97,21 @@ class TimeseriesStore:
 
     def close(self) -> None:
         self.conn.close()
+
+    def _bootstrap_fact_versions(self) -> None:
+        """Seed version history for facts written before migration 003."""
+        for table in VERSIONED_FACT_TABLES:
+            rows = self.conn.execute(f"SELECT * FROM {table}").fetchall()
+            for row in rows:
+                hash_field = "source_record_hash" if table == "fact_container_event" else "record_hash"
+                record_hash = row[hash_field]
+                observed_at = row["ingested_at"] if "ingested_at" in row.keys() else now_utc()
+                normalized = {key: row[key] for key in row.keys() if key not in {"raw_json"}}
+                event_time = next((row[key] for key in ("operator_time", "pass_time", "sailing_date", "event_time") if key in row.keys()), None)
+                self.conn.execute("""INSERT OR IGNORE INTO fact_record_version
+                    (fact_table,business_key_hash,observed_at,event_time,record_hash,normalized_json,raw_json)
+                    VALUES(?,?,?,?,?,?,?)""", (table, row["business_key_hash"], observed_at, event_time, record_hash, stable(normalized), row["raw_json"] or ""))
+        self.conn.commit()
 
     def __enter__(self) -> "TimeseriesStore":
         return self
@@ -172,6 +194,14 @@ class TimeseriesStore:
         old = self.conn.execute(f"SELECT {hash_field} FROM {table} WHERE business_key_hash=?", (row["business_key_hash"],)).fetchone()
         if old and old[0] == row.get(hash_field):
             return False, False
+        if table in VERSIONED_FACT_TABLES:
+            observed_at = clean(row.get("ingested_at")) or now_utc()
+            event_time = next((clean(row.get(key)) for key in ("operator_time", "pass_time", "sailing_date", "event_time") if row.get(key)), None)
+            record_hash = row.get(hash_field) or digest(stable(row))
+            normalized = {field: row.get(field) for field in fields if field != "raw_json"}
+            self.conn.execute("""INSERT OR IGNORE INTO fact_record_version
+                (fact_table,business_key_hash,observed_at,event_time,record_hash,normalized_json,raw_json)
+                VALUES(?,?,?,?,?,?,?)""", (table, row["business_key_hash"], observed_at, event_time, record_hash, stable(normalized), row.get("raw_json") or ""))
         sql = "INSERT OR REPLACE INTO " + table + "(" + ",".join(fields) + ") VALUES(" + ",".join("?" for _ in fields) + ")"
         self.conn.execute(sql, tuple(row.get(field) for field in fields))
         self.conn.commit()
@@ -300,7 +330,9 @@ class VesselPlanCrawler(BaseCrawler):
         return self.client.vessel_plan_page(page, page_size=request.page_size, **request.filters)
 
     def business_key(self, row: dict[str, Any]) -> str:
-        parts = [clean(row.get(key)) or "" for key in ("vesselUnCode", "voyage", "terminal", "vesselDirect", "eta")]
+        # ETA is mutable plan content, not identity. Keeping it out of the key
+        # lets as-of reconstruction see a revised plan instead of two voyages.
+        parts = [clean(row.get(key)) or "" for key in ("vesselUnCode", "voyage", "terminal", "vesselDirect")]
         return "|".join(parts) if all(parts) else stable(row)
 
     def event_time(self, row: dict[str, Any]) -> str | None:
@@ -356,8 +388,6 @@ class ContainerNoticeCrawler(BaseCrawler):
 def run_phase1(config: Config) -> dict[str, Any]:
     with TimeseriesStore(config.db_path) as store, NpediClient(config) as client:
         return {"vessel_plan": VesselPlanCrawler(client, store, config).crawl(), "container_notice": ContainerNoticeCrawler(client, store, config).crawl()}
-
-
 
 
 

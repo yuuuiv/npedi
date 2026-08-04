@@ -8,6 +8,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any
 
+from backtest import model_version_for_as_of, normalize_as_of
 from timeseries import TimeseriesStore, now_utc
 
 METRICS = {
@@ -31,26 +32,35 @@ def _z(value: float, values: list[float]) -> float:
     return (value - mean) / std if std else 0.0
 
 
-def _revision_rows(store: TimeseriesStore) -> list[tuple[str, str, str, float]]:
+def _revision_rows(store: TimeseriesStore, as_of: str | None = None) -> list[tuple[str, str, str, float]]:
     out = []
     previous: dict[str, str] = {}
-    for r in store.conn.execute("SELECT business_key_hash, terminal_code, snapshot_time, record_hash FROM fact_vessel_plan_snapshot ORDER BY business_key_hash, snapshot_time"):
-        old = previous.get(r["business_key_hash"])
+    sql = "SELECT vessel_code, voyage, terminal_code, direction, snapshot_time, record_hash FROM fact_vessel_plan_snapshot"
+    args = (as_of,) if as_of else ()
+    if as_of:
+        sql += " WHERE snapshot_time<=?"
+    sql += " ORDER BY business_key_hash, snapshot_time"
+    for r in store.conn.execute(sql, args):
+        identity = (r["vessel_code"] or "", r["voyage"] or "", r["terminal_code"] or "", r["direction"] or "")
+        old = previous.get(identity)
         if old is not None and old != r["record_hash"]:
             out.append((r["snapshot_time"][:10], r["terminal_code"] or "", "", 1.0))
-        previous[r["business_key_hash"]] = r["record_hash"]
+        previous[identity] = r["record_hash"]
     return out
 
-def build_curves(store: TimeseriesStore, *, granularity: str = "day", model_version: str = "v1", spi_weights: dict[str, float] | None = None) -> int:
-    table = "agg_flow_weekly" if granularity == "week" else "agg_flow_daily"
+def build_curves(store: TimeseriesStore, *, granularity: str = "day", model_version: str = "v1", spi_weights: dict[str, float] | None = None, as_of: str | None = None) -> int:
+    as_of = normalize_as_of(as_of)
+    effective_model_version = model_version_for_as_of(model_version, as_of)
+    table = ("agg_flow_weekly_asof" if granularity == "week" else "agg_flow_daily_asof") if as_of else ("agg_flow_weekly" if granularity == "week" else "agg_flow_daily")
     time_col = "week_start" if granularity == "week" else "flow_date"
     series: dict[tuple[str, str, str], dict[str, Any]] = defaultdict(lambda: defaultdict(list))
-    for row in store.conn.execute(f"SELECT * FROM {table}"):
+    source_sql = f"SELECT * FROM {table}" + (" WHERE as_of_time=?" if as_of else "")
+    for row in store.conn.execute(source_sql, (as_of,) if as_of else ()):
         key = (row[time_col], row["terminal_code"] or "UNKNOWN", row["direction"] or "")
         for curve_type, (field, _) in METRICS.items():
             if row[field] is not None:
                 series[key][curve_type].append(float(row[field]))
-    for bucket, terminal, direction, value in _revision_rows(store):
+    for bucket, terminal, direction, value in _revision_rows(store, as_of):
         if granularity == "week":
             d = date.fromisoformat(bucket)
             bucket = (d - timedelta(days=d.weekday())).isoformat()
@@ -62,7 +72,7 @@ def build_curves(store: TimeseriesStore, *, granularity: str = "day", model_vers
             if values:
                 grouped[(curve_type, terminal, direction)].append((bucket, statistics.fmean(values)))
 
-    store.conn.execute("DELETE FROM mart_curve_series WHERE model_version=?", (model_version,))
+    store.conn.execute("DELETE FROM mart_curve_series WHERE model_version=?", (effective_model_version,))
     count = 0
     for (curve_type, terminal, direction), points in grouped.items():
         points.sort()
@@ -79,7 +89,7 @@ def build_curves(store: TimeseriesStore, *, granularity: str = "day", model_vers
             moving = statistics.fmean(raw_values[max(0, i - 3):i + 1])
             quality = "complete" if len(buckets) == expected else "partial"
             source = {"expected_buckets": expected, "observed_buckets": len(buckets), "completeness_ratio": len(buckets) / expected, "moving_average_4": moving, "terminal": terminal, "direction": direction}
-            store.conn.execute("""INSERT OR REPLACE INTO mart_curve_series(curve_id,curve_type,entity_type,entity_key,granularity,time_bucket,value,lower_bound,upper_bound,quality_flag,model_version,computed_at,source_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (curve_id, curve_type, "terminal", f"{terminal}:{direction}", granularity, bucket, value, None, None, quality, model_version, now_utc(), json.dumps(source, ensure_ascii=False, sort_keys=True)))
+            store.conn.execute("""INSERT OR REPLACE INTO mart_curve_series(curve_id,curve_type,entity_type,entity_key,granularity,time_bucket,value,lower_bound,upper_bound,quality_flag,model_version,computed_at,source_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (curve_id, curve_type, "terminal", f"{terminal}:{direction}", granularity, bucket, value, None, None, quality, effective_model_version, now_utc(), json.dumps(source, ensure_ascii=False, sort_keys=True)))
             count += 1
 
     # Missing inputs are omitted and the remaining SPI weights are renormalized.
@@ -99,9 +109,7 @@ def build_curves(store: TimeseriesStore, *, granularity: str = "day", model_vers
             spi = sum(contributions.values())
             curve_id = f"pressure_index:terminal:{terminal}:{direction}:{granularity}"
             source = {"contributions": contributions, "weights": weights, "missing_components": [m for m in weights if m not in available]}
-            store.conn.execute("""INSERT OR REPLACE INTO mart_curve_series(curve_id,curve_type,entity_type,entity_key,granularity,time_bucket,value,lower_bound,upper_bound,quality_flag,model_version,computed_at,source_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (curve_id, "pressure_index", "terminal", f"{terminal}:{direction}", granularity, bucket, spi, None, None, "complete", model_version, now_utc(), json.dumps(source, ensure_ascii=False, sort_keys=True)))
+            store.conn.execute("""INSERT OR REPLACE INTO mart_curve_series(curve_id,curve_type,entity_type,entity_key,granularity,time_bucket,value,lower_bound,upper_bound,quality_flag,model_version,computed_at,source_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (curve_id, "pressure_index", "terminal", f"{terminal}:{direction}", granularity, bucket, spi, None, None, "complete", effective_model_version, now_utc(), json.dumps(source, ensure_ascii=False, sort_keys=True)))
             count += 1
     store.conn.commit()
     return count
-
-

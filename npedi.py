@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 from aggregate import rebuild_gold
+from backtest import model_version_for_as_of
 from change import detect_changes, snapshot_trends
 from cluster import build_feature_windows, cluster_features
 from config import Config, load_config
@@ -27,15 +28,22 @@ def parser() -> argparse.ArgumentParser:
     crawl.add_argument("target", choices=("vessel-plan", "container-notice", "vgm", "cargo-release", "transshipment", "container-history"))
     crawl.add_argument("--mode", default="incremental")
     crawl.add_argument("--resume", action="store_true")
-    crawl.add_argument("--limit", type=int, default=500)
-    crawl.add_argument("--offset", type=int, default=0)
-    for name in ("normalize", "aggregate", "build-curves", "quality-report", "render"):
+    crawl.add_argument("--limit", type=int, default=500, help="箱号批次大小（VGM/container-history）")
+    crawl.add_argument("--offset", type=int, default=0, help="箱号批次偏移（VGM/container-history）")
+    for name in ("normalize", "quality-report"):
         sub.add_parser(name)
+    aggregate = sub.add_parser("aggregate")
+    aggregate.add_argument("--as-of", help="只使用该时刻之前已观测的数据")
+    curves = sub.add_parser("build-curves")
+    curves.add_argument("--as-of", help="只使用该时刻之前已观测的数据")
+    render = sub.add_parser("render")
+    render.add_argument("--as-of", help="渲染指定 as-of 曲线")
     cluster = sub.add_parser("cluster")
     cluster.add_argument("--entity", default="terminal")
     cluster.add_argument("--curve-type", default="vgm")
     cluster.add_argument("--window", default="52w")
     cluster.add_argument("--algorithm", choices=("hierarchical", "hdbscan"), default="hierarchical")
+    cluster.add_argument("--as-of", help="只使用该时刻之前已观测的数据")
     sub.add_parser("detect-changepoints")
     return p
 
@@ -70,6 +78,20 @@ def _vgm_container_batch(store: TimeseriesStore, limit: int, offset: int) -> tup
     return "none", []
 
 
+def _container_history_batch(store: TimeseriesStore, limit: int, offset: int) -> list[str]:
+    """Return a deterministic pending container-history batch.
+
+    History enrichment uses the same queue as VGM. The rows remain pending so
+    a failed or interrupted batch can be retried; callers use offset to move
+    through the stable queue ordering.
+    """
+    limit, offset = max(1, limit), max(0, offset)
+    rows = store.conn.execute("""SELECT container_no FROM container_enrichment_queue
+        WHERE status='pending' AND container_no IS NOT NULL AND TRIM(container_no)<>''
+        ORDER BY first_seen_at, container_no LIMIT ? OFFSET ?""", (limit, offset)).fetchall()
+    return [row[0] for row in rows]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.INFO))
@@ -88,17 +110,20 @@ def main(argv: list[str] | None = None) -> int:
                     if not container_nos:
                         logging.getLogger("npedi").warning("没有可用于 VGM 查询的箱号；先运行 transshipment，或确认旧 containers 表已存在")
                 elif args.target == "container-history":
-                    context["container_nos"] = [r[0] for r in store.conn.execute("SELECT container_no FROM container_enrichment_queue WHERE status='pending' LIMIT ?", (args.limit,))]
+                    container_nos = _container_history_batch(store, args.limit, args.offset)
+                    context.update({"container_nos": container_nos, "offset": args.offset})
+                    if not container_nos:
+                        logging.getLogger("npedi").warning("没有可用于 container history 的待处理箱号；先运行 transshipment 或 VGM")
                 print(json.dumps(crawler.crawl(context, resume=args.resume), ensure_ascii=False))
         elif args.command == "normalize":
             print(json.dumps({"bronze_records": store.conn.execute("SELECT COUNT(*) FROM bronze_record").fetchone()[0], "note": "core crawlers normalize on ingest"}, ensure_ascii=False))
         elif args.command == "aggregate":
-            print(json.dumps(rebuild_gold(store), ensure_ascii=False))
+            print(json.dumps(rebuild_gold(store, as_of=args.as_of), ensure_ascii=False))
         elif args.command == "build-curves":
-            print(json.dumps({"day": build_curves(store, granularity="day", spi_weights=cfg.spi_weights), "week": build_curves(store, granularity="week", spi_weights=cfg.spi_weights)}, ensure_ascii=False))
+            print(json.dumps({"day": build_curves(store, granularity="day", spi_weights=cfg.spi_weights, as_of=args.as_of), "week": build_curves(store, granularity="week", spi_weights=cfg.spi_weights, as_of=args.as_of)}, ensure_ascii=False))
         elif args.command == "cluster":
-            rows = build_feature_windows(store, curve_type=args.curve_type, granularity="week", entity_type=args.entity, min_completeness=.8)
-            print(json.dumps(cluster_features(store, rows, algorithm=args.algorithm), ensure_ascii=False))
+            rows = build_feature_windows(store, curve_type=args.curve_type, granularity="week", entity_type=args.entity, min_completeness=.8, as_of=args.as_of)
+            print(json.dumps(cluster_features(store, rows, algorithm=args.algorithm, as_of=args.as_of), ensure_ascii=False))
         elif args.command == "detect-changepoints":
             print(json.dumps({"detect": detect_changes(store), "trend_snapshots": snapshot_trends(store)}, ensure_ascii=False))
         elif args.command == "quality-report":
@@ -106,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(write_quality_report(store, output), ensure_ascii=False))
         elif args.command == "render":
             output = cfg.export_dir / "timeseries_curves.html"
-            print(str(render_curves(store, output)))
+            print(str(render_curves(store, output, model_version=model_version_for_as_of("v1", args.as_of))))
     return 0
 
 

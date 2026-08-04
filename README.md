@@ -1,17 +1,125 @@
-# npedi 航次数据增量爬虫
+# npedi 航次数据增量爬虫与时序分析套件
 
-把 npedi 上所有航次的集装箱明细抓进 SQLite，每天早、中、晚各增量更新一次，每轮结束后导出 CSV。
+把 npedi 上所有航次的集装箱明细抓进 SQLite，并同时提供两类能力：
 
-这里有**两条互补的管线**，共用一个库、一套认证和一套调度：
+- 传统的 npp / 进出门（CODECO）增量与回填管线，用于维护交付状态、历史补数和 CSV 导出
+- 新增的时序分析管线，用于把 vessel plan、container notice、VGM、cargo release、transshipment 和 container history 等历史接口规范化为 bronze / silver / gold 层，支撑质量报告、曲线和聚类分析
+
+这里有三条互补的管线，共用一个库、一套认证和一套调度：
 
 | 管线   | 数据                              | 覆盖范围                | 命令前缀                   |
 | ------ | --------------------------------- | ----------------------- | -------------------------- |
-| npp    | 集装箱核放比对状态（放行、发送）  | 848 个在册航次          | `backfill` / `incremental` |
-| 进出门 | 码头进门/出门 CODECO 报文流水     | 13,832 个航次，回溯到 2022 年 | `gate-*`                   |
+| npp    | 集装箱核放比对状态（放行、发送）  | 当前数据库中的航次目录，运行 `status` 查看 | `backfill` / `incremental` |
+| 进出门 | 码头进门/出门 CODECO 报文流水     | 当前数据库中的历史目录，运行 `gate-status` 查看 | `gate-*`                   |
+| 时序/分析 | 历史接口快照与质量/曲线分析      | 依赖已接入的时序端点    | `crawl` / `aggregate` / `build-curves` / `cluster` |
 
-先跑通 npp 那条；进出门是后加的，用来补 npp 已下架航次的历史数据，见[下面这节](#进出门查询是另一条管线用来补历史数据)。
+先跑通 npp 那条；进出门是后加的，用来补 npp 已下架航次的历史数据，见[下面这节](#进出门查询是另一条管线用来补历史数据)。时序分析管线则是最近补上的能力，适合做历史快照、质量评估和曲线建模。
 
-设计思路和接口细节见 [npp 架构文档](ARCHITECTURE.md) 与 [进出门架构文档](ARCHITECTURE-GATE.md)。
+设计思路和接口细节见 [npp 架构文档](ARCHITECTURE.md)、[进出门架构文档](ARCHITECTURE-GATE.md) 与 [时序架构文档](NPEDI_TIMESERIES_ARCHITECTURE.md)。
+
+## 新增的时序分析入口
+
+最近新增的时序模块已经接入了 Alembic / SQLite 迁移、Bronze / Silver / Gold 结构以及一组离线分析脚本。单独运行某个入口时，常用命令如下：
+
+```powershell
+python npedi.py crawl vessel-plan       # 抓取 vessel plan
+python npedi.py crawl container-notice  # 抓取 container notice
+python npedi.py crawl transshipment     # 抓取 transshipment
+python npedi.py crawl vgm                # 按箱号抓取 VGM
+python npedi.py crawl cargo-release      # 抓取 cargo release
+python npedi.py crawl container-history  # 按箱号补充 container history
+python npedi.py aggregate                # 聚合为 Gold 层
+python npedi.py build-curves             # 生成日/周曲线
+python npedi.py quality-report           # 输出质量报告
+python npedi.py render                   # 生成曲线 HTML
+python scripts/demo_timeseries.py        # 生成演示数据与报告
+```
+
+更完整的操作说明见 [docs/timeseries-operations.md](docs/timeseries-operations.md) 与 [docs/architecture.md](docs/architecture.md)。
+
+## 用 as-of 数据生成可回测聚类
+
+严格回测不能直接读取当前事实表。先指定一个历史截止时刻，程序只使用在该时刻之前已经观测到的事实版本：
+
+```powershell
+python npedi.py aggregate --as-of 2026-08-01T23:59:59+00:00
+python npedi.py build-curves --as-of 2026-08-01T23:59:59+00:00
+python npedi.py cluster --entity terminal --curve-type vgm --algorithm hierarchical --as-of 2026-08-01T23:59:59+00:00
+python npedi.py render --as-of 2026-08-01T23:59:59+00:00
+```
+
+`--as-of` 按观测时间截断，不是简单按业务事件时间截断：一条后来才被采集到、但事件发生得更早的记录，也不会提前出现在历史回测中。`fact_vessel_plan_snapshot` 已经按快照时间保存；VGM、cargo release、transshipment 和 container history 从迁移 003 之后开始保存 append-only 版本。迁移前已经被覆盖的旧版本无法凭空恢复，但原始响应仍保存在 `raw_api_response` 中，后续可以单独重建。
+
+## 先查看当前库，再按依赖顺序补齐时序数据
+
+`npedi.sqlite` 同时保存传统 npp、进出门和时序数据。当前库的状态是：
+
+| 数据 | 当前状态 | 接下来做什么 |
+| --- | --- | --- |
+| npp 航次目录和核放历史 | 航次目录已回填；当前 `containers` 表为空，但 `container_history` 已有历史变更记录 | 用 `python sync.py incremental` 继续维护，不把它当作集装箱明细已完整采集 |
+| 进出门 CODECO | 航次目录和进出门报文历史回填已完成，待回填单元为 0 | 用 `python sync.py gate-incremental` 继续采集新增报文 |
+| vessel plan | Bronze、Silver 和航次计划快照已存在 | 定期重新抓取快照 |
+| container notice | 已有 Silver 记录和断点 | 定期重新抓取快照 |
+| transshipment | `fact_transshipment` 目前为空 | 先运行它，成功后会建立集装箱增强队列 |
+| VGM | `fact_container_vgm` 目前为空；最近一次尝试没有拿到有效记录 | 在 transshipment 后按箱号分批运行 |
+| cargo release | `fact_cargo_release` 目前为空 | 运行全量回填 |
+| container history | `fact_container_event` 目前为空 | 等增强队列产生后再运行；使用 `--limit` 和 `--offset` 分批回填 |
+
+先确认数据库和 token 状态：
+
+```powershell
+python sync.py status
+python sync.py gate-status
+```
+
+时序采集要按“计划和通知 → transshipment → VGM → cargo release → container history”的顺序进行。原因是 VGM 和 container history 依赖集装箱号队列，而当前 npp 的 `containers` 表没有可供它们直接使用的箱号。采完事实表后，再运行 Gold 聚合和分析产物：
+
+```powershell
+python npedi.py crawl vessel-plan
+python npedi.py crawl container-notice
+python npedi.py crawl transshipment --resume
+python npedi.py crawl vgm --limit 500 --offset 0 --resume
+python npedi.py crawl cargo-release --resume
+python npedi.py crawl container-history --limit 500 --offset 0 --resume
+python npedi.py aggregate
+python npedi.py build-curves
+python npedi.py quality-report
+python npedi.py render
+```
+
+VGM 和 container history 的 `--limit`、`--offset` 都是箱号批次，不是请求页码。队列超过 500 个箱号时，按 `0`、`500`、`1000` 递增 offset 继续运行。批次使用固定的 `first_seen_at, container_no` 排序，重复运行同一 offset 配合 `--resume` 不会跳过后续箱号。每一步都应检查 JSON 输出和 `crawl_run` 状态；`partial` 或 `failed` 时先处理错误，再继续后续步骤。
+
+Windows PowerShell 可以用下面的命令按顺序执行基础管线；它会先统计增强队列，再为每 500 个箱号运行一次 VGM 和 container history：
+
+```powershell
+$ErrorActionPreference = "Stop"
+$py = if (Test-Path .\.venv\Scripts\python.exe) { ".\.venv\Scripts\python.exe" } else { "python" }
+function Run-Npedi {
+    param([string[]]$Arguments)
+    & $py @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "命令失败: $($Arguments -join ' ')" }
+}
+Run-Npedi @("npedi.py", "crawl", "vessel-plan")
+Run-Npedi @("npedi.py", "crawl", "container-notice")
+Run-Npedi @("npedi.py", "crawl", "transshipment", "--resume")
+$queue = [int](& $py -c "import sqlite3; c=sqlite3.connect('npedi.sqlite'); print(c.execute('select count(*) from container_enrichment_queue').fetchone()[0]); c.close()")
+if ($LASTEXITCODE -ne 0) { throw "读取增强队列失败" }
+for ($offset = 0; $offset -lt $queue; $offset += 500) {
+    Run-Npedi @("npedi.py", "crawl", "vgm", "--limit", "500", "--offset", "$offset", "--resume")
+}
+Run-Npedi @("npedi.py", "crawl", "cargo-release", "--resume")
+$historyQueue = [int](& $py -c "import sqlite3; c=sqlite3.connect('npedi.sqlite'); print(c.execute('select count(*) from container_enrichment_queue where status=?', ('pending',)).fetchone()[0]); c.close()")
+if ($LASTEXITCODE -ne 0) { throw "读取 container history 队列失败" }
+for ($offset = 0; $offset -lt $historyQueue; $offset += 500) {
+    Run-Npedi @("npedi.py", "crawl", "container-history", "--limit", "500", "--offset", "$offset", "--resume")
+}
+Run-Npedi @("npedi.py", "aggregate")
+Run-Npedi @("npedi.py", "build-curves")
+Run-Npedi @("npedi.py", "quality-report")
+Run-Npedi @("npedi.py", "render")
+```
+
+这条命令会运行完整的 transshipment、VGM、cargo release 和 container history 回填，可能需要较长时间。队列行会保留为 `pending`，这样失败或中断的批次可以用同一个 offset 配合 `--resume` 重试；批次完成后再从下一个 offset 继续。
 
 ## 第一次部署按 probe、backfill、计划任务的顺序来
 

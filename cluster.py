@@ -8,6 +8,7 @@ import uuid
 from datetime import date
 from typing import Any
 
+from backtest import model_version_for_as_of, normalize_as_of
 from timeseries import TimeseriesStore, now_utc
 
 FEATURE_NAMES = ("mean", "median", "std", "coefficient_of_variation", "trend_slope", "growth_4w", "growth_13w", "peak_to_median", "zero_ratio", "seasonal_strength", "autocorrelation_lag_1", "autocorrelation_lag_7_or_4", "arrival_delay_mean", "arrival_delay_p90", "transshipment_share", "plan_revision_frequency", "data_completeness")
@@ -38,9 +39,15 @@ def _autocorrelation(values: list[float], lag: int) -> float | None:
     return sum((x - am) * (y - bm) for x, y in zip(a, b)) / den if den else 0.0
 
 
-def build_feature_windows(store: TimeseriesStore, *, curve_type: str = "vgm", granularity: str = "week", entity_type: str = "terminal", feature_version: str = "v1", min_completeness: float = 0.0) -> list[dict[str, Any]]:
+def build_feature_windows(store: TimeseriesStore, *, curve_type: str = "vgm", granularity: str = "week", entity_type: str = "terminal", feature_version: str = "v1", min_completeness: float = 0.0, as_of: str | None = None) -> list[dict[str, Any]]:
+    as_of = normalize_as_of(as_of)
+    curve_model_version = model_version_for_as_of("v1", as_of)
+    effective_feature_version = model_version_for_as_of(feature_version, as_of)
     grouped: dict[str, list[tuple[str, float, float]]] = {}
-    for row in store.conn.execute("SELECT entity_key,time_bucket,value,quality_flag,source_json FROM mart_curve_series WHERE curve_type=? AND granularity=? AND entity_type=? ORDER BY entity_key,time_bucket", (curve_type, granularity, entity_type)):
+    for row in store.conn.execute("""SELECT entity_key,time_bucket,value,quality_flag,source_json
+        FROM mart_curve_series
+        WHERE curve_type=? AND granularity=? AND entity_type=? AND model_version=?
+        ORDER BY entity_key,time_bucket""", (curve_type, granularity, entity_type, curve_model_version)):
         if row["value"] is not None:
             source = json.loads(row["source_json"] or "{}")
             grouped.setdefault(row["entity_key"], []).append((row["time_bucket"], float(row["value"]), float(source.get("completeness_ratio", 0.0))))
@@ -55,7 +62,7 @@ def build_feature_windows(store: TimeseriesStore, *, curve_type: str = "vgm", gr
         median = statistics.median(values)
         std = statistics.pstdev(values) if len(values) > 1 else 0.0
         features = {"mean": statistics.fmean(values), "median": median, "std": std, "coefficient_of_variation": std / abs(statistics.fmean(values)) if statistics.fmean(values) else 0.0, "trend_slope": _slope(values), "growth_4w": _growth(values, 4), "growth_13w": _growth(values, 13), "peak_to_median": max(values) / median if median else None, "zero_ratio": sum(v == 0 for v in values) / len(values), "seasonal_strength": 0.0, "autocorrelation_lag_1": _autocorrelation(values, 1), "autocorrelation_lag_7_or_4": _autocorrelation(values, 4 if len(values) < 14 else 7), "arrival_delay_mean": statistics.fmean(values) if curve_type == "arrival_delay" else None, "arrival_delay_p90": sorted(values)[min(len(values) - 1, math.ceil(len(values) * .9) - 1)] if curve_type == "arrival_delay" else None, "transshipment_share": 1.0 if curve_type == "transshipment" else 0.0, "plan_revision_frequency": 0.0, "data_completeness": completeness}
-        row = {"entity_type": entity_type, "entity_key": entity_key, "window_start": points[0][0], "window_end": points[-1][0], "frequency": granularity, "feature_version": feature_version, **features, "feature_json": json.dumps(features, ensure_ascii=False, sort_keys=True)}
+        row = {"entity_type": entity_type, "entity_key": entity_key, "window_start": points[0][0], "window_end": points[-1][0], "frequency": granularity, "feature_version": effective_feature_version, **features, "feature_json": json.dumps({**features, "as_of": as_of}, ensure_ascii=False, sort_keys=True)}
         fields = tuple(row.keys())
         values_sql = tuple(row.values())
         store.conn.execute("INSERT OR REPLACE INTO feature_series_window(" + ",".join(fields) + ") VALUES(" + ",".join("?" for _ in fields) + ")", values_sql)
@@ -70,13 +77,14 @@ def _vectors(rows: list[dict[str, Any]]) -> tuple[list[list[float]], list[str]]:
     return vectors, names
 
 
-def cluster_features(store: TimeseriesStore, rows: list[dict[str, Any]], *, algorithm: str = "hierarchical", algorithm_version: str = "v1", normalization_method: str = "standard_scaler", min_completeness: float = .8) -> dict[str, Any]:
+def cluster_features(store: TimeseriesStore, rows: list[dict[str, Any]], *, algorithm: str = "hierarchical", algorithm_version: str = "v1", normalization_method: str = "standard_scaler", min_completeness: float = .8, as_of: str | None = None) -> dict[str, Any]:
+    as_of = normalize_as_of(as_of)
     eligible = [row for row in rows if (row.get("data_completeness") or 0.0) >= min_completeness]
     run_id = str(uuid.uuid4())
     window_start = min((r["window_start"] for r in eligible), default="")
     window_end = max((r["window_end"] for r in eligible), default="")
     if len(eligible) < 2:
-        store.conn.execute("INSERT INTO cluster_run(cluster_run_id,algorithm,algorithm_version,feature_version,window_start,window_end,entity_type,parameters_json,normalization_method,sample_count,cluster_count,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (run_id, algorithm, algorithm_version, rows[0]["feature_version"] if rows else "", window_start, window_end, rows[0]["entity_type"] if rows else "unknown", json.dumps({"min_completeness": min_completeness}), normalization_method, len(eligible), 0, now_utc()))
+        store.conn.execute("INSERT INTO cluster_run(cluster_run_id,algorithm,algorithm_version,feature_version,window_start,window_end,entity_type,parameters_json,normalization_method,sample_count,cluster_count,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (run_id, algorithm, algorithm_version, rows[0]["feature_version"] if rows else "", window_start, window_end, rows[0]["entity_type"] if rows else "unknown", json.dumps({"min_completeness": min_completeness, "as_of": as_of}), normalization_method, len(eligible), 0, now_utc()))
         store.conn.commit()
         return {"cluster_run_id": run_id, "sample_count": len(eligible), "cluster_count": 0, "assignments": []}
     try:
@@ -101,7 +109,7 @@ def cluster_features(store: TimeseriesStore, rows: list[dict[str, Any]], *, algo
         score = float(silhouette_score(matrix, labels)) if len(unique) >= 2 else None
     except ImportError as exc:
         raise RuntimeError("scikit-learn is required for clustering") from exc
-    store.conn.execute("INSERT INTO cluster_run(cluster_run_id,algorithm,algorithm_version,feature_version,window_start,window_end,entity_type,parameters_json,normalization_method,sample_count,cluster_count,silhouette_score,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (run_id, algorithm, algorithm_version, eligible[0]["feature_version"], window_start, window_end, eligible[0]["entity_type"], json.dumps({"min_completeness": min_completeness}), normalization_method, len(eligible), len(unique), score, now_utc()))
+    store.conn.execute("INSERT INTO cluster_run(cluster_run_id,algorithm,algorithm_version,feature_version,window_start,window_end,entity_type,parameters_json,normalization_method,sample_count,cluster_count,silhouette_score,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (run_id, algorithm, algorithm_version, eligible[0]["feature_version"], window_start, window_end, eligible[0]["entity_type"], json.dumps({"min_completeness": min_completeness, "as_of": as_of}), normalization_method, len(eligible), len(unique), score, now_utc()))
     assignments = []
     for row, label in zip(eligible, labels):
         assignment = (run_id, row["entity_key"], int(label) if int(label) >= 0 else None, None, None, int(label) < 0, None, now_utc())

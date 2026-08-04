@@ -67,6 +67,12 @@ class Phase1Tests(unittest.TestCase):
             self.assertEqual(self.client.plan_calls, [2])
             self.assertEqual(result["seen"], 1)
 
+    def test_plan_identity_does_not_change_when_eta_is_revised(self):
+        crawler = VesselPlanCrawler(self.client, None, self.cfg)
+        base = {"vesselUnCode": "UN1", "voyage": "V1", "terminal": "T1", "vesselDirect": "E", "eta": "20260801000000"}
+        revised = {**base, "eta": "20260802000000"}
+        self.assertEqual(crawler.business_key(base), crawler.business_key(revised))
+
 
 if __name__ == "__main__":
     unittest.main()

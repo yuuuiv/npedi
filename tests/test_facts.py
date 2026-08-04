@@ -7,6 +7,7 @@ from pathlib import Path
 
 from config import Config
 from crawlers import CargoReleaseCrawler, ContainerHistoryCrawler, TransshipmentCrawler, VgmCrawler
+from npedi import _container_history_batch
 from timeseries import TimeseriesStore
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "core_facts.json").read_text(encoding="utf-8-sig"))
@@ -58,6 +59,17 @@ class FactTests(unittest.TestCase):
             self.assertEqual(result["inserted"], 1)
             row = store.conn.execute("SELECT event_type,event_code_raw,event_time FROM fact_container_event").fetchone()
             self.assertEqual(tuple(row), ("UNKNOWN", "ZZ", None))
+
+    def test_history_batch_honors_limit_and_offset(self):
+        with TimeseriesStore(self.db) as store:
+            for number in ("ABCU0000001", "ABCU0000002", "ABCU0000003"):
+                store.conn.execute("""INSERT INTO container_enrichment_queue
+                    (container_no, priority, source, first_seen_at, status)
+                    VALUES (?, 0, 'fixture', ?, 'pending')""", (number, number,))
+            store.conn.commit()
+
+            self.assertEqual(_container_history_batch(store, 2, 0), ["ABCU0000001", "ABCU0000002"])
+            self.assertEqual(_container_history_batch(store, 2, 2), ["ABCU0000003"])
 
 
 if __name__ == "__main__":
