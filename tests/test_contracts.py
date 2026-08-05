@@ -36,6 +36,13 @@ class RequestErrorCrawler(BaseCrawler):
         return self.client.vessel_plan_page(page, page_size=request.page_size)
 
 
+class EmptyCrawler(BaseCrawler):
+    endpoint_name = "empty_fixture"
+
+    def build_requests(self, context):
+        return iter(())
+
+
 class ContractTests(unittest.TestCase):
     def test_auth_401_and_403_stop(self):
         for status in (401, 403):
@@ -65,6 +72,16 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual(result["status"], "partial")
                 self.assertEqual(result["errors"], 1)
                 self.assertEqual(store.conn.execute("SELECT COUNT(*) FROM ingest_error WHERE stage='request'").fetchone()[0], 1)
+
+    def test_empty_source_is_not_reported_as_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "empty-source.sqlite"
+            cfg = Config(token="fixture", db_path=db, request_delay=(0, 0))
+            with TimeseriesStore(db) as store:
+                result = EmptyCrawler(None, store, cfg).crawl()
+                self.assertEqual(result["status"], "partial")
+                self.assertEqual(result["errors"], 1)
+                self.assertEqual(store.conn.execute("SELECT COUNT(*) FROM ingest_error WHERE stage='source'").fetchone()[0], 1)
 
     def test_parser_and_cargo_rule_contracts(self):
         self.assertEqual(parse_number(" 12.5 "), 12.5)

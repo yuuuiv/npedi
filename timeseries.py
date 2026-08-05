@@ -238,8 +238,10 @@ class BaseCrawler:
         context = context or {}
         run_id = self.store.start_run(self.endpoint_name, self.endpoint_name, self.mode, context)
         stats = {"requests": 0, "raw": 0, "seen": 0, "inserted": 0, "updated": 0, "errors": 0}
+        partitions = 0
         try:
             for request in self.build_requests(context):
+                partitions += 1
                 checkpoint = self.store.checkpoint(self.endpoint_name, request.partition_key)
                 page = int(checkpoint["next_page"]) if resume and checkpoint else 1
                 page_hashes: list[str] = []
@@ -278,6 +280,9 @@ class BaseCrawler:
                 else:
                     stats["errors"] += 1
                     self.store.error(run_id, self.endpoint_name, "pagination", "max page limit reached")
+            if partitions == 0:
+                stats["errors"] += 1
+                self.store.error(run_id, self.endpoint_name, "source", "no request partitions were built", context)
             status = "partial" if stats["errors"] else "success"
             self.store.finish_run(run_id, status, stats)
             return {"run_id": run_id, "status": status, **stats}
