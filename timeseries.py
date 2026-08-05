@@ -100,10 +100,25 @@ class TimeseriesStore:
 
     def _bootstrap_fact_versions(self) -> None:
         """Seed version history for facts written before migration 003."""
+        marker = "__fact_versions_bootstrapped_v1__"
+        if self.conn.execute("SELECT 1 FROM schema_migration WHERE name=?", (marker,)).fetchone():
+            return
         for table in VERSIONED_FACT_TABLES:
-            rows = self.conn.execute(f"SELECT * FROM {table}").fetchall()
+            hash_field = "source_record_hash" if table == "fact_container_event" else "record_hash"
+            # Do not load or reprocess the entire current projection on every
+            # CLI startup. Only legacy rows without a matching version need
+            # seeding; normal upserts append their own versions.
+            rows = self.conn.execute(
+                f"""SELECT f.* FROM {table} AS f
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM fact_record_version AS v
+                        WHERE v.fact_table=?
+                          AND v.business_key_hash=f.business_key_hash
+                          AND v.record_hash=f.{hash_field}
+                    )""",
+                (table,),
+            )
             for row in rows:
-                hash_field = "source_record_hash" if table == "fact_container_event" else "record_hash"
                 record_hash = row[hash_field]
                 observed_at = row["ingested_at"] if "ingested_at" in row.keys() else now_utc()
                 normalized = {key: row[key] for key in row.keys() if key not in {"raw_json"}}
@@ -111,6 +126,10 @@ class TimeseriesStore:
                 self.conn.execute("""INSERT OR IGNORE INTO fact_record_version
                     (fact_table,business_key_hash,observed_at,event_time,record_hash,normalized_json,raw_json)
                     VALUES(?,?,?,?,?,?,?)""", (table, row["business_key_hash"], observed_at, event_time, record_hash, stable(normalized), row["raw_json"] or ""))
+        self.conn.execute(
+            "INSERT OR IGNORE INTO schema_migration(name, applied_at) VALUES(?,?)",
+            (marker, now_utc()),
+        )
         self.conn.commit()
 
     def __enter__(self) -> "TimeseriesStore":
@@ -228,6 +247,16 @@ class BaseCrawler:
     def fetch_page(self, request: RequestSpec, page: int) -> dict[str, Any]:
         raise NotImplementedError
 
+    def validate_response(self, request: RequestSpec, response: dict[str, Any], rows: list[dict[str, Any]]) -> str | None:
+        """Return a safety error when a response cannot be trusted for a request.
+
+        Crawlers may override this for endpoints whose server-side filters are
+        known to be unreliable.  Returning an error stops the whole crawl
+        before any returned rows are persisted or the next partition is
+        requested.
+        """
+        return None
+
     def extract_rows(self, response: dict[str, Any]) -> list[dict[str, Any]]:
         data = response.get("data") or {}
         if isinstance(data, list):
@@ -264,14 +293,35 @@ class BaseCrawler:
         self.store.upsert_dimensions(normalized)
         return self.store.upsert_bronze(self.endpoint_name, self.business_key(row), normalized, self.event_time(row), self.source_update_time(row))
 
+    def on_request_success(self, request: RequestSpec) -> None:
+        """Run after one request partition has completed without errors."""
+
+    def on_request_failure(self, request: RequestSpec) -> None:
+        """Run after one request partition has stopped with an error."""
+
     def crawl(self, context: dict[str, Any] | None = None, *, resume: bool = False) -> dict[str, Any]:
         context = context or {}
         run_id = self.store.start_run(self.endpoint_name, self.endpoint_name, self.mode, context)
         stats = {"requests": 0, "raw": 0, "seen": 0, "inserted": 0, "updated": 0, "errors": 0}
+        abort_reason: str | None = None
         try:
             for request in self.build_requests(context):
+                errors_before_request = stats["errors"]
+                request_complete = False
                 checkpoint = self.store.checkpoint(self.endpoint_name, request.partition_key)
                 page = int(checkpoint["next_page"]) if resume and checkpoint else 1
+                if (
+                    resume
+                    and checkpoint
+                    and checkpoint["observed_total"] is not None
+                    and (page - 1) * request.page_size >= int(checkpoint["observed_total"])
+                ):
+                    # This partition reached its reported total in an earlier
+                    # process. Treat it as complete without making a redundant
+                    # post-reboot request. The success hook also upgrades old
+                    # container-history queue rows to status=complete.
+                    self.on_request_success(request)
+                    continue
                 page_hashes: list[str] = []
                 while page <= self.config.max_pages_per_query:
                     try:
@@ -283,6 +333,18 @@ class BaseCrawler:
                     stats["requests"] += 1
                     stats["raw"] += int(self.store.raw_page(run_id, self.endpoint_name, request, page, response))
                     rows = self.extract_rows(response)
+                    validation_error = self.validate_response(request, response, rows)
+                    if validation_error:
+                        abort_reason = validation_error
+                        stats["errors"] += 1
+                        self.store.error(
+                            run_id,
+                            self.endpoint_name,
+                            "response_validation",
+                            validation_error,
+                            {"partition": request.partition_key, "page": page, "filters": request.filters},
+                        )
+                        break
                     total = self.get_total(response)
                     page_hash = digest(stable(rows))
                     if page_hash in page_hashes[-2:]:
@@ -303,13 +365,20 @@ class BaseCrawler:
                         stats["updated"] += int(updated)
                     self.store.save_checkpoint(self.endpoint_name, request.partition_key, page + 1, total)
                     if not rows or (total is not None and page * request.page_size >= total) or len(rows) < request.page_size:
+                        request_complete = True
                         break
                     page += 1
                 else:
                     stats["errors"] += 1
                     self.store.error(run_id, self.endpoint_name, "pagination", "max page limit reached")
+                if request_complete and stats["errors"] == errors_before_request:
+                    self.on_request_success(request)
+                else:
+                    self.on_request_failure(request)
+                if abort_reason:
+                    break
             status = "partial" if stats["errors"] else "success"
-            self.store.finish_run(run_id, status, stats)
+            self.store.finish_run(run_id, status, stats, abort_reason)
             return {"run_id": run_id, "status": status, **stats}
         except AuthExpired:
             stats["errors"] += 1
@@ -388,6 +457,3 @@ class ContainerNoticeCrawler(BaseCrawler):
 def run_phase1(config: Config) -> dict[str, Any]:
     with TimeseriesStore(config.db_path) as store, NpediClient(config) as client:
         return {"vessel_plan": VesselPlanCrawler(client, store, config).crawl(), "container_notice": ContainerNoticeCrawler(client, store, config).crawl()}
-
-
-

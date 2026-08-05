@@ -50,76 +50,50 @@ python npedi.py render --as-of 2026-08-01T23:59:59+00:00
 
 `--as-of` 按观测时间截断，不是简单按业务事件时间截断：一条后来才被采集到、但事件发生得更早的记录，也不会提前出现在历史回测中。`fact_vessel_plan_snapshot` 已经按快照时间保存；VGM、cargo release、transshipment 和 container history 从迁移 003 之后开始保存 append-only 版本。迁移前已经被覆盖的旧版本无法凭空恢复，但原始响应仍保存在 `raw_api_response` 中，后续可以单独重建。
 
-## 先查看当前库，再按依赖顺序补齐时序数据
+## 全量箱目录、闸口历史与远程增强
 
-`npedi.sqlite` 同时保存传统 npp、进出门和时序数据。当前库的状态是：
-
-| 数据 | 当前状态 | 接下来做什么 |
-| --- | --- | --- |
-| npp 航次目录和核放历史 | 航次目录已回填；当前 `containers` 表为空，但 `container_history` 已有历史变更记录 | 用 `python sync.py incremental` 继续维护，不把它当作集装箱明细已完整采集 |
-| 进出门 CODECO | 航次目录和进出门报文历史回填已完成，待回填单元为 0 | 用 `python sync.py gate-incremental` 继续采集新增报文 |
-| vessel plan | Bronze、Silver 和航次计划快照已存在 | 定期重新抓取快照 |
-| container notice | 已有 Silver 记录和断点 | 定期重新抓取快照 |
-| transshipment | `fact_transshipment` 目前为空 | 先运行它，成功后会建立集装箱增强队列 |
-| VGM | `fact_container_vgm` 目前为空；最近一次尝试没有拿到有效记录 | 在 transshipment 后按箱号分批运行 |
-| cargo release | `fact_cargo_release` 目前为空 | 运行全量回填 |
-| container history | `fact_container_event` 目前为空 | 等增强队列产生后再运行；使用 `--limit` 和 `--offset` 分批回填 |
-
-先确认数据库和 token 状态：
+全量箱号不再依赖只有 53 行的旧增强队列。`seed-container-catalog` 从已经回填完成的 `gate_events` 建立目录，并分别保存 VGM 与单箱轨迹的状态。当前主库已经建立 2,488,395 个箱号，其中 2,488,083 个通过 ISO 6346 校验；无效箱号保留用于审计，但不会发送到只能按箱号过滤的接口。
 
 ```powershell
-python sync.py status
-python sync.py gate-status
+python npedi.py seed-container-catalog  # 首次或 gate 历史明显增长后刷新
+python npedi.py coverage-status         # 查看目录和两套远程增强的完成数
 ```
 
-时序采集要按“计划和通知 → transshipment → VGM → cargo release → container history”的顺序进行。原因是 VGM 和 container history 依赖集装箱号队列，而当前 npp 的 `containers` 表没有可供它们直接使用的箱号。采完事实表后，再运行 Gold 聚合和分析产物：
+`container_event_full` 统一视图直接读取 3,659,747 条 CODECO 源记录，提供当前接口目录覆盖的 `IN_GATE` / `OUT_GATE` 历史，不再把数百万事件复制一份到事实表。这里的“完整”只表示已采集源记录全部纳入，不表示官方统计口径的全港吞吐量：接口必须逐船×航次查询，历史目录和服务端留存覆盖明显不均匀。`observed_at` 使用报文采集时间，所以严格 as-of 回测不会在“当时尚未采集”时提前看到历史事件。
+
+闸口聚合严格按报文 `type` 判断事件。`GATE_OUT` 即使携带历史 `inGateTime` 也不会再合成第二次进门；同日、同方向、同箱号去重。图表根据 ISO 箱型首码把 20/40/45 英尺箱换算为 1/2/2.25 TEU，但标题明确使用“CODECO 接口覆盖”，不能直接和官方全港 TEU 序列拼接回测。
+
+VGM 和 `/ediContainerlog` 仍是远程增强。两个接口都只能可靠地按单箱查询，因此 248.8 万箱各需要约 248.8 万个请求；按默认 500–1000 ms 节流，单个接口的理论下限约 22 天。脚本每批始终消费 `offset=0`：成功后待处理集合会缩小，递增 offset 反而会跳箱。
+
+一个终端顺序跑两种增强：
 
 ```powershell
-python npedi.py crawl vessel-plan
-python npedi.py crawl container-notice
-python npedi.py crawl transshipment --resume
-python npedi.py crawl vgm --limit 500 --offset 0 --resume
-python npedi.py crawl cargo-release --resume
-python npedi.py crawl container-history --limit 500 --offset 0 --resume
-python npedi.py aggregate
-python npedi.py build-curves
-python npedi.py quality-report
-python npedi.py render
+powershell -ExecutionPolicy Bypass -File .\backfill_full_container_enrichment.ps1 -Target all -BatchSize 500
 ```
 
-VGM 和 container history 的 `--limit`、`--offset` 都是箱号批次，不是请求页码。队列超过 500 个箱号时，按 `0`、`500`、`1000` 递增 offset 继续运行。批次使用固定的 `first_seen_at, container_no` 排序，重复运行同一 offset 配合 `--resume` 不会跳过后续箱号。每一步都应检查 JSON 输出和 `crawl_run` 状态；`partial` 或 `failed` 时先处理错误，再继续后续步骤。
-
-Windows PowerShell 可以用下面的命令按顺序执行基础管线；它会先统计增强队列，再为每 500 个箱号运行一次 VGM 和 container history：
+两个终端并行时，目录只需刷新一次：
 
 ```powershell
-$ErrorActionPreference = "Stop"
-$py = if (Test-Path .\.venv\Scripts\python.exe) { ".\.venv\Scripts\python.exe" } else { "python" }
-function Run-Npedi {
-    param([string[]]$Arguments)
-    & $py @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "命令失败: $($Arguments -join ' ')" }
-}
-Run-Npedi @("npedi.py", "crawl", "vessel-plan")
-Run-Npedi @("npedi.py", "crawl", "container-notice")
-Run-Npedi @("npedi.py", "crawl", "transshipment", "--resume")
-$queue = [int](& $py -c "import sqlite3; c=sqlite3.connect('npedi.sqlite'); print(c.execute('select count(*) from container_enrichment_queue').fetchone()[0]); c.close()")
-if ($LASTEXITCODE -ne 0) { throw "读取增强队列失败" }
-for ($offset = 0; $offset -lt $queue; $offset += 500) {
-    Run-Npedi @("npedi.py", "crawl", "vgm", "--limit", "500", "--offset", "$offset", "--resume")
-}
-Run-Npedi @("npedi.py", "crawl", "cargo-release", "--resume")
-$historyQueue = [int](& $py -c "import sqlite3; c=sqlite3.connect('npedi.sqlite'); print(c.execute('select count(*) from container_enrichment_queue where status=?', ('pending',)).fetchone()[0]); c.close()")
-if ($LASTEXITCODE -ne 0) { throw "读取 container history 队列失败" }
-for ($offset = 0; $offset -lt $historyQueue; $offset += 500) {
-    Run-Npedi @("npedi.py", "crawl", "container-history", "--limit", "500", "--offset", "$offset", "--resume")
-}
-Run-Npedi @("npedi.py", "aggregate")
-Run-Npedi @("npedi.py", "build-curves")
-Run-Npedi @("npedi.py", "quality-report")
-Run-Npedi @("npedi.py", "render")
+# 终端 1
+powershell -ExecutionPolicy Bypass -File .\backfill_full_container_enrichment.ps1 -Target vgm -BatchSize 500 -SkipCatalogSeed
+
+# 终端 2
+powershell -ExecutionPolicy Bypass -File .\backfill_full_container_enrichment.ps1 -Target history -BatchSize 500 -SkipCatalogSeed
 ```
 
-这条命令会运行完整的 transshipment、VGM、cargo release 和 container history 回填，可能需要较长时间。队列行会保留为 `pending`，这样失败或中断的批次可以用同一个 offset 配合 `--resume` 重试；批次完成后再从下一个 offset 继续。
+可以随时关闭终端或重启电脑，再运行同一条命令即可续跑。脚本会检查 `crawl_run`，遇到 `partial` / `failed` 或队列不前进时立即停止，不会越过错误继续。想先验证一批可加 `-MaxBatches 1`。
+
+### cargo-release 字段规则
+
+官网 cargo-release 表把 `cargovolum` 标为“件数”，因此新字段使用 `piece_count`，旧 `cargo_volume` 仅为兼容保留。`grossweight` 按规则 `cargo-weight-kg-v1` 标准化为 `gross_weight_kg`：官网其他货物页面明确显示 kg，VGM 使用 kg，且本库最大值 318,014,000 只有解释为 318,014 吨的散货船提单才符合物理量级。原始值、标准化值、单位和规则版本全部保留。
+
+仪表板主业务量仍使用放行提单数；标准化货重只在独立的“放行货重（吨）”面板展示。生成当前 CODECO 覆盖图和业务图：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\rebuild_meaningful_dashboard.ps1
+```
+
+仪表板只需要周曲线；如需日级研究再单独运行 `python npedi.py build-curves --granularity day`。这样日常重建不会先写入上百万个日曲线点。
 
 ## 第一次部署按 probe、backfill、计划任务的顺序来
 
@@ -284,7 +258,7 @@ python sync.py gate-status        # 看还剩多少个航次×方向
 
 **中断了直接重跑同一条命令。** 断点记在航次×方向这一级，已完成的自动跳过，报文按 id 幂等入库，重复跑不会重复入库，也不会漏。断电、断网、Ctrl-C、token 失效都一样。
 
-**最可能打断你的是 token，不是别的。** token 是服务端会话，短信验证码登录，程序没法自动续签；实测寿命一天上下，而回填大概率比这久。失效时程序会立刻停下、写 `ALERT_TOKEN_EXPIRED`、以退出码 2 退出，不会反复重试轰炸接口。换个新 token 再跑一次同样的命令即可，可能要重复一两轮。
+**最可能打断你的是 token，不是别的。** token 是服务端会话，实测寿命一天上下，而回填大概率比这久。默认配置下，失效时程序会立即停下、写 `ALERT_TOKEN_EXPIRED` 并以退出码 2 退出。配置可选的自动短信登录后，客户端会换取新 token 并只重试原请求一次；失败仍按默认方式停止，不会循环发送短信。详见 [自动短信登录](docs/auto-login.md)。
 
 想让它自己接上，可以挂个循环——token 没换之前每 10 分钟醒来一次，看到换了就继续：
 
@@ -363,9 +337,9 @@ python analyze.py changes --csv export/changes_detail.csv
 
 加 `--csv` 会导出字段级明细，一行一个字段的变化（`changed_at, run_id, id, containerno, unvessel, voyage, field, old, new`）。这比 `changes_*.csv` 那种整行宽表小得多，也更适合直接喂给下游。
 
-## token 失效时，从浏览器复制一个新的贴进 .env
+## token 失效时，手工换 token 或启用自动短信登录
 
-这是唯一需要人工介入的环节。失效时程序会立刻停下来写一个 `ALERT_TOKEN_EXPIRED` 文件，不会反复重试，计划任务还会弹一个 Windows 通知。然后：
+未启用自动登录时，失效后程序会写一个 `ALERT_TOKEN_EXPIRED` 文件，不会反复重试，计划任务还会弹一个 Windows 通知。然后：
 
 1. 在有登录态的那台机器上打开 <https://www.npedi.com/onesite/>，确认还是登录状态
 2. 按 F12，在 **Application** → **Cookies** → **www.npedi.com** 里复制 `Web-Token` 的值
@@ -384,7 +358,9 @@ python analyze.py changes --csv export/changes_detail.csv
 
 第一个 token 期间只记录、不提醒 —— 还没有历史寿命可以参照。
 
-自动续签这条路走不通，三个原因都确认过：token 是服务端会话，JWT 里只有一个会话 ID，没有过期时间，客户端解不出它什么时候到期；前端没有任何续签接口；登录只有手机号加短信验证码一条路。
+这不是 JWT refresh-token 续签：JWT 只有服务端会话 ID，没有 `exp`，站点也没有续签接口。可选自动模式会在 401/403 后完整执行一次手机号、图片验证码和短信验证码登录，再原子更新 `.env`；配置与安全边界见 [docs/auto-login.md](docs/auto-login.md)。
+
+图片识别采用固定版本的 `anexplore/cnn_for_captcha` 定长 CNN 结构。首次启用前需要人工标注 NPEDI 自有样本并训练本地模型；不要直接打开 `AUTO_LOGIN`。完整顺序与命令也在上述文档中。
 
 ## 哈希没变的行完全不写库
 

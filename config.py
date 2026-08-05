@@ -82,6 +82,17 @@ class Config:
     timeout_seconds: float = 60.0
     max_retries: int = 3               # 仅针对网络错误 / 5xx / 429
     auth_probe: bool = True            # 每轮开始用 getInfo 探活 token（1 次请求）
+    env_path: Path = BASE_DIR / ".env"
+    auto_login: bool = False
+    npedi_mobile: str = ""
+    captcha_solver_command: str = ""
+    captcha_solver_timeout_seconds: float = 30.0
+    captcha_attempts: int = 3
+    telegram_reader_bot_token: str = ""
+    telegram_chat_id: str = ""
+    telegram_sms_sender_bot_id: str = ""
+    sms_code_pattern: str = r"(?<!\d)(\d{4,8})(?!\d)"
+    sms_code_timeout_seconds: float = 180.0
     max_pages_per_query: int = 5000    # 防翻页失控的硬上限
 
     # --- 增量窗口 ---
@@ -179,6 +190,17 @@ def load_config(env_path: Path | None = None) -> Config:
         timeout_seconds=_num("TIMEOUT_SECONDS", 60.0),
         max_retries=_int("MAX_RETRIES", 3),
         auth_probe=_bool("AUTH_PROBE", True),
+        env_path=env_path.resolve(),
+        auto_login=_bool("AUTO_LOGIN", False),
+        npedi_mobile=_get(env, "NPEDI_MOBILE"),
+        captcha_solver_command=_get(env, "CAPTCHA_SOLVER_COMMAND"),
+        captcha_solver_timeout_seconds=_num("CAPTCHA_SOLVER_TIMEOUT_SECONDS", 30.0),
+        captcha_attempts=_int("CAPTCHA_ATTEMPTS", 3),
+        telegram_reader_bot_token=_get(env, "TELEGRAM_READER_BOT_TOKEN"),
+        telegram_chat_id=_get(env, "TELEGRAM_CHAT_ID"),
+        telegram_sms_sender_bot_id=_get(env, "TELEGRAM_SMS_SENDER_BOT_ID"),
+        sms_code_pattern=_get(env, "SMS_CODE_PATTERN", r"(?<!\d)(\d{4,8})(?!\d)"),
+        sms_code_timeout_seconds=_num("SMS_CODE_TIMEOUT_SECONDS", 180.0),
         future_margin_hours=_num("FUTURE_MARGIN_HOURS", 24.0),
         active_past_days=_int("ACTIVE_PAST_DAYS", 7),
         active_future_days=_int("ACTIVE_FUTURE_DAYS", 14),

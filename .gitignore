@@ -3,6 +3,7 @@
 ALERT_TOKEN_EXPIRED
 .sync.lock
 .sync.gate.lock
+.auth-refresh.lock
 
 # 抓包文件含 token 与账号手机号/邮箱等个人信息
 *.har
@@ -20,5 +21,8 @@ EDI*.html
 
 __pycache__/
 *.pyc
+.captcha-cnn-venv/
+captcha-data/
+captcha-model/
 
 .claude/

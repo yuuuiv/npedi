@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from coverage import ensure_container_state, mark_enrichment
 from normalize import normalize_cargo_release, normalize_container_event, normalize_transshipment, normalize_vgm
 from timeseries import BaseCrawler, RequestSpec, TimeseriesStore, clean, now_utc
 
@@ -20,6 +21,7 @@ class FactCrawler(BaseCrawler):
         result = self.store.upsert_fact(self.fact_table, normalized, self.fact_fields)
         container_no = normalized.get("container_no")
         if container_no:
+            ensure_container_state(self.store, container_no, source=self.endpoint_name)
             self.store.conn.execute("""INSERT INTO container_enrichment_queue(container_no,priority,source,first_seen_at,status) VALUES(?,?,?,?,?)
             ON CONFLICT(container_no) DO UPDATE SET source=excluded.source""", (container_no, 0, self.endpoint_name, now_utc(), "pending"))
             self.store.conn.commit()
@@ -37,7 +39,14 @@ class VgmCrawler(FactCrawler):
             container_no = clean(item)
             if container_no:
                 # The live endpoint accepts containerNumber; vessel filters returned HTTP 400.
-                yield RequestSpec(f"container:{container_no}", {"containerNumber": container_no}, 1)
+                # One container can have multiple VGM observations. Keep the
+                # partition per container, but fetch all of its rows in a
+                # normal-sized page instead of issuing one request per row.
+                yield RequestSpec(
+                    f"container:{container_no}",
+                    {"containerNumber": container_no},
+                    self.config.page_size,
+                )
 
     def fetch_page(self, request: RequestSpec, page: int) -> dict[str, Any]:
         return self.client.vgm_page(page, page_size=request.page_size, **request.filters)
@@ -45,15 +54,68 @@ class VgmCrawler(FactCrawler):
     def normalize_fact(self, row: dict[str, Any]) -> dict[str, Any]:
         return normalize_vgm(row)
 
+    def on_request_success(self, request: RequestSpec) -> None:
+        mark_enrichment(
+            self.store, request.filters["containerNumber"], "vgm", success=True
+        )
+
+    def on_request_failure(self, request: RequestSpec) -> None:
+        mark_enrichment(
+            self.store, request.filters["containerNumber"], "vgm",
+            success=False, error="VGM request did not complete",
+        )
+
 
 class CargoReleaseCrawler(FactCrawler):
     endpoint_name = "cargo_release"
     mode = "backfill"
     fact_table = "fact_cargo_release"
-    fact_fields = ("business_key_hash","vessel_code","vessel_name_raw","voyage","direction","bill_no","pass_time","terminal_code","flag","cargo_volume","gross_weight","ingested_at","record_hash","raw_json")
+    fact_fields = ("business_key_hash","vessel_code","vessel_name_raw","voyage","direction","bill_no","pass_time","terminal_code","flag","cargo_volume","gross_weight","piece_count","gross_weight_kg","gross_weight_unit","weight_rule_version","ingested_at","record_hash","raw_json")
+
+    def build_requests(self, context: dict[str, Any]) -> Iterable[RequestSpec]:
+        # The live endpoint rejects an empty vessel selection. Container notice
+        # is the compact, already-collected source of vessel/voyage pairs and
+        # avoids expanding a request for every historical vessel-plan snapshot.
+        rows = self.store.conn.execute("""SELECT vessel_code, voyage
+            FROM silver_container_notice
+            WHERE vessel_code IS NOT NULL AND TRIM(vessel_code)<>''
+              AND voyage IS NOT NULL AND TRIM(voyage)<>''
+            GROUP BY vessel_code, voyage
+            ORDER BY vessel_code, voyage""")
+        for row in rows:
+            vessel_code, voyage = clean(row[0]), clean(row[1])
+            if vessel_code and voyage:
+                yield RequestSpec(
+                    f"vessel:{vessel_code}:{voyage}",
+                    {"vesselcode": vessel_code, "voyage": voyage},
+                    self.config.page_size,
+                )
 
     def fetch_page(self, request: RequestSpec, page: int) -> dict[str, Any]:
         return self.client.cargo_release_page(page, page_size=request.page_size, **request.filters)
+
+    def validate_response(self, request: RequestSpec, response: dict[str, Any], rows: list[dict[str, Any]]) -> str | None:
+        """Stop if the API returns rows outside the requested vessel/voyage.
+
+        The live endpoint has accepted these filters while ignoring them.  A
+        client-side filter would still require downloading the entire global
+        result once per vessel/voyage, so reject the response instead.
+        """
+        if not rows:
+            return None
+
+        expected_vessel = clean(request.filters.get("vesselcode")) or ""
+        expected_voyage = clean(request.filters.get("voyage")) or ""
+        for row in rows:
+            actual_vessel = clean(row.get("vesselcode") or row.get("vesselCode")) or ""
+            actual_voyage = clean(row.get("voyage")) or ""
+            if actual_vessel != expected_vessel or actual_voyage != expected_voyage:
+                return (
+                    "cargo-release endpoint ignored filters: "
+                    f"requested vesselcode={expected_vessel!r}, voyage={expected_voyage!r}; "
+                    f"response contains vesselcode={actual_vessel!r}, voyage={actual_voyage!r}"
+                )
+        return None
 
     def normalize_fact(self, row: dict[str, Any]) -> dict[str, Any]:
         return normalize_cargo_release(row)
@@ -95,3 +157,31 @@ class ContainerHistoryCrawler(FactCrawler):
     def persist(self, row: dict[str, Any]) -> tuple[bool, bool]:
         normalized = self.normalize_fact(row)
         return self.store.upsert_fact(self.fact_table, normalized, self.fact_fields)
+
+    def on_request_success(self, request: RequestSpec) -> None:
+        mark_enrichment(
+            self.store, request.filters["container_no"], "history", success=True
+        )
+        self.store.conn.execute(
+            """UPDATE container_enrichment_queue
+               SET status='complete', last_attempt_at=?,
+                   attempt_count=attempt_count+1, last_error=NULL
+               WHERE container_no=?""",
+            (now_utc(), request.filters["container_no"]),
+        )
+        self.store.conn.commit()
+
+    def on_request_failure(self, request: RequestSpec) -> None:
+        mark_enrichment(
+            self.store, request.filters["container_no"], "history",
+            success=False, error="container-history request did not complete",
+        )
+        self.store.conn.execute(
+            """UPDATE container_enrichment_queue
+               SET status='pending', last_attempt_at=?,
+                   attempt_count=attempt_count+1,
+                   last_error='container-history request did not complete'
+               WHERE container_no=?""",
+            (now_utc(), request.filters["container_no"]),
+        )
+        self.store.conn.commit()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import statistics
 from collections import defaultdict
@@ -11,16 +12,29 @@ from typing import Any
 from backtest import model_version_for_as_of, normalize_as_of
 from timeseries import TimeseriesStore, now_utc
 
+LOGGER = logging.getLogger("npedi.curves")
+
 METRICS = {
-    "planned_demand": ("planned_vessel_call_count", "planned_vessel_calls"),
-    "vgm": ("vgm_weight_kg", "vgm_weight_kg"),
-    "cargo_release": ("released_weight", "released_weight"),
-    "transshipment": ("transshipment_weight", "transshipment_weight"),
-    "arrival_delay": ("avg_arrival_delay_hours", "arrival_delay_hours"),
-    "departure_delay": ("avg_departure_delay_hours", "departure_delay_hours"),
-    "container_vgm_count": ("vgm_container_count", "unique_container_count"),
-    "released_bill_count": ("released_bill_count", "released_bill_count"),
-    "transshipment_container_count": ("transshipment_container_count", "transshipment_container_count"),
+    "planned_demand": ("planned_vessel_call_count", "planned_vessel_calls", "sum"),
+    "vgm": ("vgm_weight_kg", "vgm_weight_kg", "sum"),
+    "cargo_release": ("released_weight_kg", "released_weight_kg", "sum"),
+    "cargo_release_piece_count": ("released_piece_count", "released_piece_count", "sum"),
+    "transshipment": ("transshipment_weight", "transshipment_weight", "sum"),
+    "arrival_delay": ("avg_arrival_delay_hours", "arrival_delay_hours", "mean"),
+    "departure_delay": ("avg_departure_delay_hours", "departure_delay_hours", "mean"),
+    "container_vgm_count": ("vgm_container_count", "unique_container_count", "sum"),
+    "released_bill_count": ("released_bill_count", "released_bill_count", "sum"),
+    "transshipment_container_count": ("transshipment_container_count", "transshipment_container_count", "sum"),
+}
+
+# Revision points are derived directly from vessel-plan snapshots rather than
+# from a Gold column, so they are intentionally not part of ``METRICS``.
+AGGREGATIONS = {name: spec[2] for name, spec in METRICS.items()} | {
+    "plan_revision": "sum",
+    "gate_in_container_count": "sum",
+    "gate_out_container_count": "sum",
+    "gate_in_teu": "sum",
+    "gate_out_teu": "sum",
 }
 
 
@@ -55,24 +69,45 @@ def build_curves(store: TimeseriesStore, *, granularity: str = "day", model_vers
     time_col = "week_start" if granularity == "week" else "flow_date"
     series: dict[tuple[str, str, str], dict[str, Any]] = defaultdict(lambda: defaultdict(list))
     source_sql = f"SELECT * FROM {table}" + (" WHERE as_of_time=?" if as_of else "")
+    LOGGER.info("loading %s Gold rows for %s curves", table, granularity)
     for row in store.conn.execute(source_sql, (as_of,) if as_of else ()):
         key = (row[time_col], row["terminal_code"] or "UNKNOWN", row["direction"] or "")
-        for curve_type, (field, _) in METRICS.items():
+        for curve_type, (field, _, _) in METRICS.items():
             if row[field] is not None:
                 series[key][curve_type].append(float(row[field]))
+    gate_table = "agg_gate_daily_asof" if as_of else "agg_gate_daily"
+    gate_sql = f"SELECT * FROM {gate_table}" + (" WHERE as_of_time=?" if as_of else "")
+    for row in store.conn.execute(gate_sql, (as_of,) if as_of else ()):
+        bucket = row["flow_date"]
+        if granularity == "week":
+            gate_day = date.fromisoformat(bucket)
+            bucket = (gate_day - timedelta(days=gate_day.weekday())).isoformat()
+        key = (bucket, "ALL_GATE_TERMINALS", row["direction"] or "")
+        series[key]["gate_in_container_count"].append(float(row["in_gate_container_count"]))
+        series[key]["gate_out_container_count"].append(float(row["out_gate_container_count"]))
+        series[key]["gate_in_teu"].append(float(row["in_gate_teu"]))
+        series[key]["gate_out_teu"].append(float(row["out_gate_teu"]))
     for bucket, terminal, direction, value in _revision_rows(store, as_of):
         if granularity == "week":
             d = date.fromisoformat(bucket)
             bucket = (d - timedelta(days=d.weekday())).isoformat()
         series[(bucket, terminal or "UNKNOWN", direction)]["plan_revision"].append(value)
+    LOGGER.info("materializing %s curve groups", granularity)
 
     grouped: dict[tuple[str, str, str], list[tuple[str, float]]] = defaultdict(list)
     for (bucket, terminal, direction), metrics in series.items():
         for curve_type, values in metrics.items():
             if values:
-                grouped[(curve_type, terminal, direction)].append((bucket, statistics.fmean(values)))
+                aggregation = AGGREGATIONS[curve_type]
+                value = sum(values) if aggregation == "sum" else statistics.fmean(values)
+                grouped[(curve_type, terminal, direction)].append((bucket, value))
 
-    store.conn.execute("DELETE FROM mart_curve_series WHERE model_version=?", (effective_model_version,))
+    # Daily and weekly curves share a model version but have distinct curve
+    # IDs. Rebuilding one granularity must not erase the other.
+    store.conn.execute(
+        "DELETE FROM mart_curve_series WHERE model_version=? AND granularity=?",
+        (effective_model_version, granularity),
+    )
     count = 0
     for (curve_type, terminal, direction), points in grouped.items():
         points.sort()
@@ -91,11 +126,17 @@ def build_curves(store: TimeseriesStore, *, granularity: str = "day", model_vers
             source = {"expected_buckets": expected, "observed_buckets": len(buckets), "completeness_ratio": len(buckets) / expected, "moving_average_4": moving, "terminal": terminal, "direction": direction}
             store.conn.execute("""INSERT OR REPLACE INTO mart_curve_series(curve_id,curve_type,entity_type,entity_key,granularity,time_bucket,value,lower_bound,upper_bound,quality_flag,model_version,computed_at,source_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (curve_id, curve_type, "terminal", f"{terminal}:{direction}", granularity, bucket, value, None, None, quality, effective_model_version, now_utc(), json.dumps(source, ensure_ascii=False, sort_keys=True)))
             count += 1
+            if count % 100000 == 0:
+                LOGGER.info("wrote %s %s curve points", count, granularity)
 
     # Missing inputs are omitted and the remaining SPI weights are renormalized.
     by_entity: dict[tuple[str, str], list[tuple[str, dict[str, float | None]]]] = defaultdict(list)
     for (bucket, terminal, direction), metrics in series.items():
-        by_entity[(terminal, direction)].append((bucket, {name: (statistics.fmean(values) if values else None) for name, (field, _) in METRICS.items() for values in [metrics.get(name, [])]}))
+        by_entity[(terminal, direction)].append((bucket, {
+            name: ((sum(values) if aggregation == "sum" else statistics.fmean(values)) if values else None)
+            for name, (field, _, aggregation) in METRICS.items()
+            for values in [metrics.get(name, [])]
+        }))
     weights = spi_weights or {"vgm": .30, "cargo_release": .20, "transshipment": .15, "arrival_delay": .15, "departure_delay": .10, "plan_revision": .10}
     for (terminal, direction), rows in by_entity.items():
         rows.sort()
@@ -112,4 +153,5 @@ def build_curves(store: TimeseriesStore, *, granularity: str = "day", model_vers
             store.conn.execute("""INSERT OR REPLACE INTO mart_curve_series(curve_id,curve_type,entity_type,entity_key,granularity,time_bucket,value,lower_bound,upper_bound,quality_flag,model_version,computed_at,source_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (curve_id, "pressure_index", "terminal", f"{terminal}:{direction}", granularity, bucket, spi, None, None, "complete", effective_model_version, now_utc(), json.dumps(source, ensure_ascii=False, sort_keys=True)))
             count += 1
     store.conn.commit()
+    LOGGER.info("%s curves committed; points=%s", granularity, count)
     return count

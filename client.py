@@ -10,7 +10,7 @@ from typing import Iterator
 
 import httpx
 
-from config import DEFAULT_UA, Config
+from config import DEFAULT_UA, Config, load_config
 
 log = logging.getLogger("npedi.client")
 
@@ -32,20 +32,50 @@ class NpediClient:
         self.cfg = cfg
         self.request_count = 0
         self._last_request_at = 0.0
-        if not cfg.token:
+        if not cfg.token and not cfg.auto_login:
             raise AuthExpired("配置中没有 token，请在 .env 里设置 WEB_TOKEN")
+        headers = {
+            "Referer": cfg.referer,
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "User-Agent": DEFAULT_UA,
+        }
+        if cfg.token:
+            headers["ediAuthorization"] = f"Bearer {cfg.token}"
         self._http = httpx.Client(
             base_url=cfg.api_base,
             timeout=cfg.timeout_seconds,
-            headers={
-                "ediAuthorization": f"Bearer {cfg.token}",
-                "Referer": cfg.referer,
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "zh-CN,zh;q=0.9",
-                "User-Agent": DEFAULT_UA,
-            },
+            headers=headers,
             follow_redirects=False,
         )
+
+    def _refresh_token(self) -> None:
+        """Refresh once under a cross-process lock without logging secrets."""
+        if not self.cfg.auto_login:
+            raise AuthExpired("token expired and AUTO_LOGIN is disabled")
+        from auth import AutoLoginError, RefreshLock, build_authenticator, update_env_token
+
+        timeout = self.cfg.sms_code_timeout_seconds + (
+            self.cfg.captcha_solver_timeout_seconds * self.cfg.captcha_attempts
+        ) + 60
+        lock_path = self.cfg.env_path.parent / ".auth-refresh.lock"
+        try:
+            with RefreshLock(lock_path, timeout_seconds=timeout):
+                latest = load_config(self.cfg.env_path).token
+                if latest and latest != self.cfg.token:
+                    token = latest
+                else:
+                    authenticator = build_authenticator(self.cfg)
+                    try:
+                        token = authenticator.login()
+                    finally:
+                        authenticator.close()
+                    update_env_token(self.cfg.env_path, token)
+                self.cfg.token = token
+                self._http.headers["ediAuthorization"] = f"Bearer {token}"
+                log.info("token refreshed automatically")
+        except AutoLoginError as exc:
+            raise AuthExpired(f"automatic login failed: {exc}") from exc
 
     def close(self) -> None:
         self._http.close()
@@ -94,6 +124,7 @@ class NpediClient:
 
     def _get(self, path: str, params: dict | None = None) -> dict:
         attempt = 0
+        auth_refreshed = False
         while True:
             attempt += 1
             self._throttle()
@@ -109,6 +140,10 @@ class NpediClient:
                 time.sleep(backoff)
                 continue
             if resp.status_code in (401, 403):
+                if not auth_refreshed and self.cfg.auto_login:
+                    self._refresh_token()
+                    auth_refreshed, attempt = True, 0
+                    continue
                 raise AuthExpired(f"{path} 返回 HTTP {resp.status_code}，token 已失效")
             if resp.status_code == 429 or resp.status_code >= 500:
                 if attempt > self.cfg.max_retries:
@@ -122,6 +157,10 @@ class NpediClient:
             except ValueError as exc:
                 snippet = resp.text[:200]
                 if "<html" in snippet.lower() or "login" in snippet.lower():
+                    if not auth_refreshed and self.cfg.auto_login:
+                        self._refresh_token()
+                        auth_refreshed, attempt = True, 0
+                        continue
                     raise AuthExpired(f"{path} 返回非 JSON，疑似登录态失效") from exc
                 raise ApiError(f"{path} 返回非 JSON: {snippet!r}") from exc
             code = payload.get("code")
@@ -129,6 +168,10 @@ class NpediClient:
                 return payload
             msg = str(payload.get("msg", ""))
             if code in (401, 403) or any(p in msg for p in _AUTH_MSG_PATTERN):
+                if not auth_refreshed and self.cfg.auto_login:
+                    self._refresh_token()
+                    auth_refreshed, attempt = True, 0
+                    continue
                 raise AuthExpired(f"{path} 返回 code={code}，token 已失效")
             raise ApiError(f"{path} 返回 code={code} msg={msg!r}")
 
@@ -148,6 +191,7 @@ class NpediClient:
 
     def _post(self, path: str, params: dict) -> dict:
         attempt = 0
+        auth_refreshed = False
         while True:
             attempt += 1
             self._throttle()
@@ -161,6 +205,10 @@ class NpediClient:
                 time.sleep(3 ** (attempt - 1))
                 continue
             if resp.status_code in (401, 403):
+                if not auth_refreshed and self.cfg.auto_login:
+                    self._refresh_token()
+                    auth_refreshed, attempt = True, 0
+                    continue
                 raise AuthExpired(f"{path} 返回 HTTP {resp.status_code}，token 已失效")
             if resp.status_code == 429 or resp.status_code >= 500:
                 if attempt > self.cfg.max_retries:
@@ -172,11 +220,19 @@ class NpediClient:
             try:
                 payload = resp.json()
             except ValueError as exc:
+                if not auth_refreshed and self.cfg.auto_login and "login" in resp.text[:200].lower():
+                    self._refresh_token()
+                    auth_refreshed, attempt = True, 0
+                    continue
                 raise ApiError(f"{path} 返回非 JSON") from exc
             if payload.get("code") == 200:
                 return payload
             msg = str(payload.get("msg", ""))
             if payload.get("code") in (401, 403) or any(p in msg for p in _AUTH_MSG_PATTERN):
+                if not auth_refreshed and self.cfg.auto_login:
+                    self._refresh_token()
+                    auth_refreshed, attempt = True, 0
+                    continue
                 raise AuthExpired(f"{path} 返回 code={payload.get('code')}，token 已失效")
             raise ApiError(f"{path} 返回 code={payload.get('code')} msg={msg!r}")
     def get_info(self) -> dict:

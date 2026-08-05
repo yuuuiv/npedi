@@ -23,7 +23,13 @@ def normalize_vgm(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_cargo_release(row: dict[str, Any]) -> dict[str, Any]:
-    return {"business_key_hash": _key((row.get("billno"), row.get("vesselcode"), row.get("voyage"), row.get("passtime"), row.get("cpcode")), row), "vessel_code": clean(row.get("vesselcode")), "vessel_name_raw": clean(row.get("envessel")), "voyage": clean(row.get("voyage")), "direction": clean(row.get("direct")), "bill_no": clean(row.get("billno")), "pass_time": parse_time(row.get("passtime")), "terminal_code": clean(row.get("cpcode")), "flag": clean(row.get("flag")), "cargo_volume": parse_number(row.get("cargovolum")), "gross_weight": parse_number(row.get("grossweight")), "ingested_at": now_utc(), "record_hash": digest(stable(row)), "raw_json": stable(row)}
+    # The official cargo-release table labels `cargovolum` as 件数. Preserve
+    # the legacy `cargo_volume` projection for compatibility, but use the
+    # explicit piece_count in all new analysis.
+    piece_count = parse_number(row.get("cargovolum"))
+    gross_weight = parse_number(row.get("grossweight"))
+    gross_weight_kg = gross_weight if gross_weight is not None and gross_weight >= 0 else None
+    return {"business_key_hash": _key((row.get("billno"), row.get("vesselcode"), row.get("voyage"), row.get("passtime"), row.get("cpcode")), row), "vessel_code": clean(row.get("vesselcode")), "vessel_name_raw": clean(row.get("envessel")), "voyage": clean(row.get("voyage")), "direction": clean(row.get("direct")), "bill_no": clean(row.get("billno")), "pass_time": parse_time(row.get("passtime")), "terminal_code": clean(row.get("cpcode")), "flag": clean(row.get("flag")), "cargo_volume": piece_count, "gross_weight": gross_weight, "piece_count": piece_count, "gross_weight_kg": gross_weight_kg, "gross_weight_unit": "kg" if gross_weight_kg is not None else None, "weight_rule_version": "cargo-weight-kg-v1" if gross_weight_kg is not None else None, "ingested_at": now_utc(), "record_hash": digest(stable(row)), "raw_json": stable(row)}
 
 
 def normalize_cargo_text(value: Any) -> str | None:
@@ -52,4 +58,3 @@ def normalize_transshipment(row: dict[str, Any], exact: dict[str, str] | None = 
 def normalize_container_event(container_no: str, row: dict[str, Any]) -> dict[str, Any]:
     # operateId meanings are not verified; UNKNOWN is deliberate.
     return {"business_key_hash": _key((container_no, row.get("vesselcode"), row.get("voyage"), row.get("cpcode"), row.get("operateId"), row.get("blNo")), row), "container_no": clean(row.get("ctnno")) or container_no, "event_type": "UNKNOWN", "event_code_raw": clean(row.get("operateId")), "event_time": None, "vessel_code": clean(row.get("vesselcode")), "voyage": clean(row.get("voyage")), "terminal_code": clean(row.get("cpcode")), "direction": clean(row.get("direct")), "bill_no": clean(row.get("blNo")), "event_source": "ediContainerlog", "event_confidence": "unverified", "source_record_hash": digest(stable(row)), "raw_json": stable(row)}
-

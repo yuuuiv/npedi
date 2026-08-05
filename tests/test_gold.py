@@ -8,7 +8,7 @@ from pathlib import Path
 from aggregate import rebuild_gold
 from config import Config
 from crawlers import CargoReleaseCrawler, TransshipmentCrawler, VgmCrawler
-from curves import build_curves
+from curves import AGGREGATIONS, build_curves
 from quality import quality_report, write_quality_report
 from test_phase1 import FakeClient as PlanClient
 from timeseries import TimeseriesStore, VesselPlanCrawler
@@ -36,8 +36,15 @@ class GoldTests(unittest.TestCase):
             self.assertGreaterEqual(counts["weekly"], 1)
             curve_count = build_curves(store, granularity="day")
             self.assertGreater(curve_count, 0)
+            day_count = store.conn.execute("SELECT COUNT(*) FROM mart_curve_series WHERE granularity='day'").fetchone()[0]
+            self.assertGreater(build_curves(store, granularity="week"), 0)
+            self.assertEqual(
+                store.conn.execute("SELECT COUNT(*) FROM mart_curve_series WHERE granularity='day'").fetchone()[0],
+                day_count,
+            )
             curve_types = {row[0] for row in store.conn.execute("SELECT DISTINCT curve_type FROM mart_curve_series")}
             self.assertIn("vgm", curve_types)
+            self.assertEqual(AGGREGATIONS["plan_revision"], "sum")
             self.assertIn("pressure_index", curve_types)
             report = quality_report(store)
             self.assertEqual(report["pagination"]["repeated_pages"], 0)
