@@ -11,7 +11,14 @@ from backtest import model_version_for_as_of
 from change import detect_changes, snapshot_trends
 from cluster import build_feature_windows, cluster_features
 from config import Config, load_config
-from coverage import coverage_status, enrichment_batch, ensure_container_state, seed_container_catalog
+from coverage import (
+    claim_enrichment_batch,
+    coverage_status,
+    enrichment_batch,
+    ensure_container_state,
+    release_enrichment_claims,
+    seed_container_catalog,
+)
 from crawlers import CargoReleaseCrawler, ContainerHistoryCrawler, TransshipmentCrawler, VgmCrawler
 from curves import build_curves
 from quality import quality_report, write_quality_report
@@ -31,6 +38,7 @@ def parser() -> argparse.ArgumentParser:
     crawl.add_argument("--resume", action="store_true")
     crawl.add_argument("--limit", type=int, default=500, help="箱号批次大小（VGM/container-history）")
     crawl.add_argument("--offset", type=int, default=0, help="箱号批次偏移（VGM/container-history）")
+    crawl.add_argument("--claim-id", help=argparse.SUPPRESS)
     for name in ("normalize", "quality-report"):
         sub.add_parser(name)
     sub.add_parser("seed-container-catalog", help="从全量 gate_events 建立可恢复的箱号目录")
@@ -72,9 +80,9 @@ def _dry(args: argparse.Namespace, cfg: Config) -> bool:
     return args.dry_run
 
 
-def _vgm_container_batch(store: TimeseriesStore, limit: int, offset: int) -> tuple[str, list[str]]:
+def _vgm_container_batch(store: TimeseriesStore, limit: int, offset: int, claim_id: str | None = None) -> tuple[str, list[str]]:
     limit, offset = max(1, limit), max(0, offset)
-    rows = enrichment_batch(store, "vgm", limit, offset)
+    rows = claim_enrichment_batch(store, "vgm", limit, claim_id) if claim_id else enrichment_batch(store, "vgm", limit, offset)
     if rows:
         return "container_enrichment_state", rows
     tables = {r[0] for r in store.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -86,7 +94,8 @@ def _vgm_container_batch(store: TimeseriesStore, limit: int, offset: int) -> tup
             for row in rows:
                 ensure_container_state(store, row[0], source="legacy_queue")
             store.conn.commit()
-            return "container_enrichment_state", enrichment_batch(store, "vgm", limit, offset)
+            rows = claim_enrichment_batch(store, "vgm", limit, claim_id) if claim_id else enrichment_batch(store, "vgm", limit, offset)
+            return "container_enrichment_state", rows
     if "containers" in tables:
         rows = store.conn.execute("""SELECT DISTINCT TRIM(containerno) FROM containers
             WHERE containerno IS NOT NULL AND TRIM(containerno)<>''
@@ -95,7 +104,7 @@ def _vgm_container_batch(store: TimeseriesStore, limit: int, offset: int) -> tup
     return "none", []
 
 
-def _container_history_batch(store: TimeseriesStore, limit: int, offset: int) -> list[str]:
+def _container_history_batch(store: TimeseriesStore, limit: int, offset: int, claim_id: str | None = None) -> list[str]:
     """Return a deterministic pending container-history batch.
 
     History enrichment uses the same queue as VGM. The rows remain pending so
@@ -103,7 +112,7 @@ def _container_history_batch(store: TimeseriesStore, limit: int, offset: int) ->
     through the stable queue ordering.
     """
     limit, offset = max(1, limit), max(0, offset)
-    rows = enrichment_batch(store, "history", limit, offset)
+    rows = claim_enrichment_batch(store, "history", limit, claim_id) if claim_id else enrichment_batch(store, "history", limit, offset)
     if rows:
         return rows
     legacy = store.conn.execute("""SELECT container_no FROM container_enrichment_queue
@@ -113,7 +122,7 @@ def _container_history_batch(store: TimeseriesStore, limit: int, offset: int) ->
         ensure_container_state(store, row[0], source="legacy_queue")
     if legacy:
         store.conn.commit()
-        return enrichment_batch(store, "history", limit, offset)
+        return claim_enrichment_batch(store, "history", limit, claim_id) if claim_id else enrichment_batch(store, "history", limit, offset)
     return []
 
 
@@ -125,21 +134,34 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     with TimeseriesStore(cfg.db_path) as store:
         if args.command == "crawl":
-            with NpediClient(cfg) as client:
-                runners = {"vessel-plan": VesselPlanCrawler, "container-notice": ContainerNoticeCrawler, "vgm": VgmCrawler, "cargo-release": CargoReleaseCrawler, "transshipment": TransshipmentCrawler, "container-history": ContainerHistoryCrawler}
-                crawler = runners[args.target](client, store, cfg)
-                context = {}
-                if args.target == "vgm":
-                    source, container_nos = _vgm_container_batch(store, args.limit, args.offset)
-                    context.update({"container_nos": container_nos, "container_source": source, "offset": args.offset})
-                    if not container_nos:
-                        logging.getLogger("npedi").warning("没有可用于 VGM 查询的箱号；先运行 transshipment，或确认旧 containers 表已存在")
-                elif args.target == "container-history":
-                    container_nos = _container_history_batch(store, args.limit, args.offset)
-                    context.update({"container_nos": container_nos, "offset": args.offset})
-                    if not container_nos:
-                        logging.getLogger("npedi").warning("没有可用于 container history 的待处理箱号；先运行 transshipment 或 VGM")
-                print(json.dumps(crawler.crawl(context, resume=args.resume), ensure_ascii=False))
+            claim_kind = "history" if args.target == "container-history" else args.target
+            claimed = 0
+            try:
+                with NpediClient(cfg) as client:
+                    runners = {"vessel-plan": VesselPlanCrawler, "container-notice": ContainerNoticeCrawler, "vgm": VgmCrawler, "cargo-release": CargoReleaseCrawler, "transshipment": TransshipmentCrawler, "container-history": ContainerHistoryCrawler}
+                    crawler = runners[args.target](client, store, cfg)
+                    context = {}
+                    if args.target == "vgm":
+                        source, container_nos = _vgm_container_batch(store, args.limit, args.offset, args.claim_id)
+                        claimed = len(container_nos)
+                        context.update({"container_nos": container_nos, "container_source": source, "offset": args.offset})
+                        if not container_nos:
+                            logging.getLogger("npedi").warning("没有可用于 VGM 查询的箱号；先运行 transshipment，或确认旧 containers 表已存在")
+                    elif args.target == "container-history":
+                        container_nos = _container_history_batch(store, args.limit, args.offset, args.claim_id)
+                        claimed = len(container_nos)
+                        context.update({"container_nos": container_nos, "offset": args.offset})
+                        if not container_nos:
+                            logging.getLogger("npedi").warning("没有可用于 container history 的待处理箱号；先运行 transshipment 或 VGM")
+                    if args.claim_id:
+                        context["parallel_worker"] = args.claim_id
+                    result = crawler.crawl(context, resume=args.resume)
+                    if args.claim_id:
+                        result["claimed"] = claimed
+                    print(json.dumps(result, ensure_ascii=False))
+            finally:
+                if args.claim_id and claim_kind in {"vgm", "history"}:
+                    release_enrichment_claims(store, claim_kind, args.claim_id)
         elif args.command == "normalize":
             print(json.dumps({"bronze_records": store.conn.execute("SELECT COUNT(*) FROM bronze_record").fetchone()[0], "note": "core crawlers normalize on ingest"}, ensure_ascii=False))
         elif args.command == "seed-container-catalog":

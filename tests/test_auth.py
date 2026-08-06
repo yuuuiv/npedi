@@ -9,7 +9,14 @@ from unittest.mock import patch
 
 import httpx
 
-from auth import NpediAuthenticator, TelegramOtpReader, update_env_token
+from auth import (
+    AutoLoginError,
+    NpediAuthenticator,
+    TelegramOtpReader,
+    TempMailOtpReader,
+    update_env_token,
+    update_env_values,
+)
 from captcha_cnn.model import CnnConfig, label_from_path, normalize_answer
 from client import AuthExpired, NpediClient
 from config import Config
@@ -96,6 +103,79 @@ class AuthTests(unittest.TestCase):
         )
         self.assertEqual(reader.wait_for_code(not_before=99), "333333")
 
+    def test_temp_mail_reader_requires_two_matching_forwarded_copies(self):
+        payload = {
+            "count": 5,
+            "results": [
+                {
+                    "id": "old",
+                    "created_at": 90,
+                    "sender": "support@neofantasy.online",
+                    "to": "tmp@example.test",
+                    "text": "【宁波舟山港】您的验证码为：111111",
+                },
+                {
+                    "id": "wrong-recipient",
+                    "created_at": 101,
+                    "sender": "support@neofantasy.online",
+                    "to": "other@example.test",
+                    "text": "【宁波舟山港】您的验证码为：222222",
+                },
+                {
+                    "id": "wrong-sender",
+                    "created_at": 101,
+                    "sender": "attacker@example.test",
+                    "to": "tmp@example.test",
+                    "text": "【宁波舟山港】您的验证码为：333333",
+                },
+                {
+                    "id": "copy-one",
+                    "created_at": 101,
+                    "sender": "com.hihonor.mms <support@neofantasy.online>",
+                    "to": "tmp@example.test",
+                    "text": "【宁波舟山港】您的验证码为：549108，请在5分钟内完成验证。UID：10035",
+                },
+                {
+                    "id": "copy-two",
+                    "created_at": 102,
+                    "sender": "support@neofantasy.online",
+                    "to": "tmp@example.test",
+                    "text": "【宁波舟山港】您的验证码为：549108，请勿泄露。",
+                },
+            ],
+        }
+        client = httpx.Client(
+            base_url="https://mail.example.test",
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload)),
+        )
+        reader = TempMailOtpReader(
+            base_url="https://mail.example.test",
+            address_jwt="secret-address-jwt-value",
+            recipient="tmp@example.test",
+            allowed_sender="support@neofantasy.online",
+            required_text="宁波舟山港",
+            required_copies=2,
+            timeout_seconds=1,
+            client=client,
+        )
+        self.assertEqual(reader.wait_for_code(not_before=100), "549108")
+
+    def test_temp_mail_reader_stops_on_rejected_address_jwt(self):
+        client = httpx.Client(
+            base_url="https://mail.example.test",
+            transport=httpx.MockTransport(lambda request: httpx.Response(401, json={"error": "unauthorized"})),
+        )
+        reader = TempMailOtpReader(
+            base_url="https://mail.example.test",
+            address_jwt="expired-address-jwt-value",
+            recipient="tmp@example.test",
+            allowed_sender="support@neofantasy.online",
+            required_text="宁波舟山港",
+            client=client,
+        )
+        with self.assertRaisesRegex(AutoLoginError, "Address JWT"):
+            reader.wait_for_code(not_before=100)
+
     def test_env_token_update_preserves_other_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / ".env"
@@ -105,6 +185,16 @@ class AuthTests(unittest.TestCase):
             self.assertIn("Web-Token =new-secret", text)
             self.assertIn("PAGE_SIZE=200", text)
             self.assertNotIn("old-secret", text)
+
+    def test_env_values_update_is_atomic_and_preserves_unrelated_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text("BASE_URL=https://example.test\nAUTO_LOGIN=false\n# keep\n", encoding="utf-8")
+            update_env_values(path, {"AUTO_LOGIN": "true", "NPEDI_MOBILE": "13800138000"})
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("AUTO_LOGIN=true", text)
+            self.assertIn("NPEDI_MOBILE=13800138000", text)
+            self.assertIn("# keep", text)
 
     def test_client_refreshes_and_retries_original_request_once(self):
         calls = 0

@@ -140,7 +140,15 @@ class TimeseriesStore:
 
     def start_run(self, job: str, endpoint: str, mode: str, config: dict[str, Any]) -> str:
         run_id = str(uuid.uuid4())
-        self.conn.execute("UPDATE crawl_run SET status='interrupted', finished_at=?, error_summary=? WHERE status='running'", (now_utc(), "superseded by later run"))
+        # A normal second run of the same job supersedes an abandoned one.
+        # Claimed enrichment workers are intentionally concurrent, so they
+        # must not mark each other's crawl_run rows as interrupted.
+        if not config.get("parallel_worker"):
+            self.conn.execute(
+                """UPDATE crawl_run SET status='interrupted', finished_at=?, error_summary=?
+                   WHERE status='running' AND job_name=?""",
+                (now_utc(), "superseded by later run", job),
+            )
         self.conn.execute("INSERT INTO crawl_run(id,job_name,endpoint_name,mode,started_at,status,config_json) VALUES(?,?,?,?,?,?,?)", (run_id, job, endpoint, mode, now_utc(), "running", stable(config)))
         self.conn.commit()
         return run_id

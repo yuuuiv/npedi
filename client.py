@@ -179,6 +179,10 @@ class NpediClient:
         params = {"pageNum": page, "pageSize": page_size, "containerNumber": filters.get("containerNumber", ""), "vessel": filters.get("vessel", ""), "ctnOperatorCode": filters.get("ctnOperatorCode", ""), "senderCode": filters.get("senderCode", ""), "direct": filters.get("direct", ""), "containerType": filters.get("containerType", "")}
         return self._get("/ctnvgm/getlist", params)
 
+    def vgm_vessel_info(self, query: str) -> dict:
+        """Resolve the UI's vessel-name search to server-side voyage keys."""
+        return self._get(f"/ctnvgm/getvesselinfo/{query}")
+
     def cargo_release_page(self, page: int, *, page_size: int, **filters: str) -> dict:
         params = {"val": filters.get("val", ""), "passno": filters.get("passno", ""), "billno": filters.get("billno", ""), "vesselcode": filters.get("vesselcode", ""), "voyage": filters.get("voyage", ""), "vesselAndVoyage": filters.get("vesselAndVoyage", ""), "pageNum": page, "pageSize": page_size}
         return self._post("/ediCustptrSZ/getEdiCustptrSz", params)

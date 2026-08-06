@@ -362,6 +362,27 @@ python analyze.py changes --csv export/changes_detail.csv
 
 图片识别采用固定版本的 `anexplore/cnn_for_captcha` 定长 CNN 结构。首次启用前需要人工标注 NPEDI 自有样本并训练本地模型；不要直接打开 `AUTO_LOGIN`。完整顺序与命令也在上述文档中。
 
+自动登录支持从 `yuuuiv/temp-mail` Worker 只读 API 或 Telegram 获取转发后的短信验证码。推荐使用 temp-mail 的邮箱专属 Address JWT；密钥不会回显，也不会进入 PowerShell 历史：
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\configure_auto_login.py
+& .\.venv\Scripts\python.exe scripts\check_auto_login.py
+```
+
+登录恢复后，先运行 `scripts/probe_vgm_batch.py` 验证站点的船名候选值能否用于服务端批量过滤，再决定 VGM 是按航次分页还是逐箱回填。
+
+container-history 确认只能逐箱查询。需要缩短墙钟时间时可使用带原子队列认领的受控 worker；建议先以 2 个运行并观察是否出现 429/5xx，最多允许 4 个：
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\run_enrichment_workers.py history --workers 2 --batch-size 500
+```
+
+全量回填运行期间，可另开终端持续查看有效箱覆盖率、活动 worker、错误数、吞吐和动态 ETA。停止查看不会停止爬虫：
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\backfill_progress.py --watch 30
+```
+
 ## 哈希没变的行完全不写库
 
 这是"增量更新而不是重新入库"的落点。每行以接口返回的 `id` 为主键做 upsert，写之前先比全字段哈希，按结果分三条路：

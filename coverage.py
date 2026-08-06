@@ -156,6 +156,77 @@ def enrichment_batch(
     return [row[0] for row in rows]
 
 
+def claim_enrichment_batch(
+    store: TimeseriesStore,
+    kind: str,
+    limit: int,
+    worker_id: str,
+) -> list[str]:
+    """Atomically lease pending rows to one bounded parallel worker."""
+    if kind not in {"vgm", "history"}:
+        raise ValueError(f"unsupported enrichment kind: {kind}")
+    worker_id = str(worker_id).strip()
+    if not worker_id:
+        raise ValueError("worker_id is required")
+    status_col = "vgm_status" if kind == "vgm" else "history_status"
+    limit = max(1, int(limit))
+    conn = store.conn
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        # A killed process cannot release its rows. Two hours is comfortably
+        # longer than a normal 500-container batch at the polite throttle.
+        conn.execute(
+            """DELETE FROM container_enrichment_claim
+               WHERE datetime(claimed_at) < datetime('now','-2 hours')"""
+        )
+        conn.execute(
+            f"""DELETE FROM container_enrichment_claim
+                WHERE kind=? AND container_no IN (
+                    SELECT container_no FROM container_enrichment_state
+                    WHERE {status_col} IN ('complete','invalid')
+                )""",
+            (kind,),
+        )
+        rows = conn.execute(
+            f"""SELECT s.container_no FROM container_enrichment_state AS s
+                WHERE s.{status_col} IN ('pending','error')
+                  AND s.iso6346_valid=1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM container_enrichment_claim AS c
+                      WHERE c.kind=? AND c.container_no=s.container_no
+                  )
+                ORDER BY CASE s.{status_col} WHEN 'pending' THEN 0 ELSE 1 END,
+                         s.last_event_time DESC, s.container_no
+                LIMIT ?""",
+            (kind, limit),
+        ).fetchall()
+        stamp = now_utc()
+        conn.executemany(
+            """INSERT INTO container_enrichment_claim(kind,container_no,worker_id,claimed_at)
+               VALUES(?,?,?,?)""",
+            [(kind, row[0], worker_id, stamp) for row in rows],
+        )
+        conn.commit()
+        return [row[0] for row in rows]
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def release_enrichment_claims(
+    store: TimeseriesStore,
+    kind: str,
+    worker_id: str,
+) -> None:
+    if kind not in {"vgm", "history"}:
+        raise ValueError(f"unsupported enrichment kind: {kind}")
+    store.conn.execute(
+        "DELETE FROM container_enrichment_claim WHERE kind=? AND worker_id=?",
+        (kind, str(worker_id)),
+    )
+    store.conn.commit()
+
+
 def mark_enrichment(
     store: TimeseriesStore,
     container_no: Any,

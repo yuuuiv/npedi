@@ -5,7 +5,13 @@ import tempfile
 from pathlib import Path
 
 from aggregate import rebuild_gate_daily
-from coverage import iso6346_valid, seed_container_catalog
+from coverage import (
+    claim_enrichment_batch,
+    ensure_container_state,
+    iso6346_valid,
+    release_enrichment_claims,
+    seed_container_catalog,
+)
 from timeseries import TimeseriesStore
 
 
@@ -49,6 +55,33 @@ class CoverageTests(unittest.TestCase):
                     store.conn.execute("SELECT COUNT(*) FROM container_event_full").fetchone()[0],
                     2,
                 )
+
+    def test_parallel_workers_claim_disjoint_batches(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with TimeseriesStore(Path(folder) / "claims.sqlite") as store:
+                ensure_container_state(store, "CSQU3054383", source="test")
+                ensure_container_state(store, "ABCU0000017", source="test")
+                store.conn.commit()
+                first = claim_enrichment_batch(store, "history", 1, "worker-1")
+                second = claim_enrichment_batch(store, "history", 1, "worker-2")
+                self.assertEqual(len(first), 1)
+                self.assertEqual(len(second), 1)
+                self.assertNotEqual(first, second)
+                release_enrichment_claims(store, "history", "worker-1")
+                self.assertEqual(
+                    claim_enrichment_batch(store, "history", 1, "worker-3"),
+                    first,
+                )
+
+    def test_parallel_runs_do_not_interrupt_each_other(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with TimeseriesStore(Path(folder) / "runs.sqlite") as store:
+                first = store.start_run("container_history", "container_history", "enrichment", {"parallel_worker": "one"})
+                second = store.start_run("container_history", "container_history", "enrichment", {"parallel_worker": "two"})
+                statuses = dict(store.conn.execute(
+                    "SELECT id,status FROM crawl_run WHERE id IN (?,?)", (first, second)
+                ))
+                self.assertEqual(statuses, {first: "running", second: "running"})
 
 
 if __name__ == "__main__":

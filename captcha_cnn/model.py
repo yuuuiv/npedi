@@ -85,42 +85,75 @@ def label_from_path(path: Path, config: CnnConfig) -> str:
 
 
 def build_model(config: CnnConfig) -> Any:
-    """Build the three-convolution fixed-length CNN used by the reference."""
+    """Build a character CNN shared by all four CAPTCHA positions.
+
+    Training expands each CAPTCHA into four overlapping character crops before
+    calling this model.  This gives the optimiser four times as many samples
+    and avoids a large position-specific fully-connected output layer.
+    """
     import tensorflow as tf
 
     keras = tf.keras
+    crop_width = character_crop_width(config)
     model = keras.Sequential(
         [
-            keras.Input(shape=(config.image_height, config.image_width, 1)),
-            keras.layers.Conv2D(32, (3, 3), activation="relu", padding="valid"),
+            keras.Input(shape=(config.image_height, crop_width, 1)),
+            keras.layers.RandomContrast(0.10),
+            keras.layers.RandomTranslation(0.05, 0.05, fill_mode="nearest"),
+            keras.layers.Conv2D(24, (3, 3), activation="relu", padding="same"),
             keras.layers.MaxPooling2D((2, 2)),
-            keras.layers.Dropout(config.dropout_rate),
-            keras.layers.Conv2D(64, (3, 3), activation="relu", padding="valid"),
+            keras.layers.Conv2D(48, (3, 3), activation="relu", padding="same"),
             keras.layers.MaxPooling2D((2, 2)),
-            keras.layers.Dropout(config.dropout_rate),
-            keras.layers.Conv2D(128, (3, 3), activation="relu", padding="valid"),
+            keras.layers.Conv2D(64, (3, 3), activation="relu", padding="same"),
             keras.layers.MaxPooling2D((2, 2)),
-            keras.layers.Dropout(config.dropout_rate),
             keras.layers.Flatten(),
-            keras.layers.Dense(1024, activation="relu"),
+            keras.layers.Dense(128, activation="relu"),
             keras.layers.Dropout(config.dropout_rate),
-            keras.layers.Dense(config.fixed_length * len(config.labels), activation="sigmoid"),
-        ]
+            keras.layers.Dense(len(config.labels), activation="softmax"),
+        ],
+        name="npedi_captcha_character_cnn",
     )
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=config.learning_rate),
-        loss="binary_crossentropy",
-        metrics=["binary_accuracy"],
+        loss="categorical_crossentropy",
+        metrics=["categorical_accuracy"],
     )
     return model
+
+
+def character_crop_width(config: CnnConfig) -> int:
+    """Return a slot width with enough overlap for slanted glyphs."""
+    return max(24, round(config.image_width / config.fixed_length) + 8)
+
+
+def extract_character_crops(images: Any, config: CnnConfig) -> Any:
+    """Expand N full images into N*fixed_length fixed-size character crops."""
+    import numpy as np
+
+    source = np.asarray(images, dtype="float32")
+    if source.ndim == 3:
+        source = source[np.newaxis, ...]
+    expected = (config.image_height, config.image_width, 1)
+    if source.ndim != 4 or tuple(source.shape[1:]) != expected:
+        raise ValueError(f"captcha array must have shape (N, {expected[0]}, {expected[1]}, 1)")
+    width = character_crop_width(config)
+    half = width // 2
+    padded = np.pad(source, ((0, 0), (0, 0), (half, half), (0, 0)), mode="edge")
+    crops = []
+    for image in range(len(source)):
+        for position in range(config.fixed_length):
+            center = round((position + 0.5) * config.image_width / config.fixed_length)
+            start = center - half + half
+            crops.append(padded[image, :, start:start + width, :])
+    return np.stack(crops)
 
 
 def _one_hot(label: str, config: CnnConfig) -> Any:
     import numpy as np
 
-    result = np.zeros(config.fixed_length * len(config.labels), dtype="float32")
+    result = np.zeros((config.fixed_length, len(config.labels)), dtype="float32")
     for position, character in enumerate(label):
-        result[position * len(config.labels) + config.labels.index(character)] = 1.0
+        result[position, config.labels.index(character)] = 1.0
     return result
 
 
@@ -135,7 +168,7 @@ def _read_image(path: Path, config: CnnConfig) -> Any:
                 f"{config.image_width}x{config.image_height}"
             )
         grayscale = image.convert("L")
-        return np.asarray(grayscale, dtype="float32").reshape(
+        return (np.asarray(grayscale, dtype="float32") / 255.0).reshape(
             config.image_height, config.image_width, 1
         )
 
@@ -210,10 +243,11 @@ class Predictor:
                     f"captcha is {image.width}x{image.height}; expected "
                     f"{self.config.image_width}x{self.config.image_height}"
                 )
-            array = np.asarray(image.convert("L"), dtype="float32").reshape(
+            array = (np.asarray(image.convert("L"), dtype="float32") / 255.0).reshape(
                 1, self.config.image_height, self.config.image_width, 1
             )
-        return decode_predictions(self.model.predict(array, verbose=0), self.config)[0]
+        crops = extract_character_crops(array, self.config)
+        return decode_predictions(self.model.predict(crops, verbose=0), self.config)[0]
 
     def predict_file(self, path: str | Path) -> str:
         return self.predict_bytes(Path(path).read_bytes())
