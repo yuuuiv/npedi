@@ -4,12 +4,21 @@
 
 ## 已确认的站点协议
 
-当前公开前端使用以下接口：
+当前公开前端（`www.npedi.com/index`，`baseURL=/portal-api`）使用以下接口。注意顺序：
+**先填手机号，再填图片验证码，验证通过之后才发短信**。
 
-- `GET /onesite-api/getSms?mobile=...`：发送短信验证码；
-- `GET /onesite-api/captchaImage`：返回 `data.img`（Base64 JPEG）和 `data.uuid`；
-- `POST /onesite-api/login`：query 参数为 `mobile`、`code`、`password`、`uuid`；
-- `code` 是图片验证码答案，`password` 是短信验证码，成功 token 位于 `data.token`。
+- `GET /portal-api/captchaImage`：返回 `data.img`（Base64 JPEG，111×36）和 `data.uuid`；
+- `GET /portal-api/user/getSms?mobile=&code2=&uuid2=&type=1`：`code2`/`uuid2` 是图片验证码及其 uuid。
+  图片答错时返回 `code=400, msg="图片验证码错误"`，**此时并不会发短信**，所以识别失败可以直接换一张图重试；
+- `POST /portal-api/login`：query 参数为 `mobile`、`username`、`password`、`code`、`code2`、`uuid`。
+  短信登录时 `username`/`password` 留空，`code` 是短信验证码，`code2`/`uuid` 是一张新的图片验证码及其 uuid；
+- 成功 token 位于 `data.token`。
+
+旧的 `/onesite-api/getSms?mobile=`（不带图片验证码）来自已经下线的 onesite 登录页，
+`/onesite/login` 现在直接跳转到 `/index`。
+
+因为图片验证码在发短信之前就被校验，`send_sms()` 和 `login()` 各自带一个重试循环：
+识别错了只换图，短信全程只请求一次；短信验证码错误则立即停止，不消耗登录尝试次数。
 
 接口变化时，可在本机导出登录 HAR，然后运行：
 
@@ -49,11 +58,25 @@ python scripts/extract_login_contract.py login.har --output login-contract.json
 OTP_READER_BACKEND=temp_mail
 TEMP_MAIL_ALLOWED_SENDER=support@neofantasy.online
 TEMP_MAIL_REQUIRED_TEXT=宁波舟山港
-TEMP_MAIL_REQUIRED_COPIES=2
+TEMP_MAIL_REQUIRED_COPIES=1
 TEMP_MAIL_POLL_SECONDS=3
 ```
 
-读取器只接受 NPEDI 发短信之后到达的邮件，同时核对收件人、发件人和正文标记。由于 SmsForwarder 对同一短信发送两封邮件，必须在两个不同邮件 ID 中提取到同一个验证码才返回；重复邮件用于确认，不会触发两次登录。
+读取器只接受 NPEDI 发短信之后到达的邮件，同时核对收件人、发件人和正文标记。
+
+`TEMP_MAIL_REQUIRED_COPIES` 默认改为 `1`。原先假设 SmsForwarder 对同一短信必发两封邮件，
+**实测不成立**：2026-08-06 的邮箱里既有成对到达的（相隔 0–9 秒），也有只到一封的，
+要求两封会直接卡在等待里超时，而短信已经发出去了。防重放依赖的是
+`not_before`（只接受请求短信之后到达的邮件）加收件人、发件人、正文标记三重过滤，不依赖重复投递。
+
+同时把 `SMS_CODE_PATTERN` 收紧到实际短信文案：
+
+```dotenv
+SMS_CODE_PATTERN=验证码为[：:]\s*(?P<code>\d{4,8})
+```
+
+默认的 `(?<!\d)(\d{4,8})(?!\d)` 会把邮件里的日期 `2026-08-06` 抓成验证码 `2026`。
+只要一封的时候没有第二封来纠错，这个宽松默认值就变危险了。
 
 先测试只读凭证，不显示任何邮件内容：
 
@@ -118,7 +141,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup_npedi_captcha_cnn.ps1
 
 训练先按整张验证码、固定随机种子划分训练集和验证集，再把每张图展开为四个有重叠的字符区域。四个位置共享同一个字符分类器，因此验证集字符不会通过裁剪泄漏进训练集。每轮输出 `val_whole_captcha_accuracy`，并按较稳定的验证集单字符准确率保存最佳权重到 `captcha-model/npedi.weights.h5`。省略 `--fresh` 会从已有权重继续训练。
 
-当前 354 张标注样本的固定留出集有 71 张。2026-08-06 的基准结果为：单字符 `86.97%`，整张四位验证码 `57.75%`（41/71）。这个指标可以配合登录时刷新图片重试，但还不适合假设一次必定成功；默认最多尝试 3 张不同图片，短信只请求一次。继续增加标注样本后，应重新执行上面的训练和评估命令，只以留出集结果判断是否改善。
+2026-08-06 的最新结果（`train` 分支 1,188 张标注样本，固定留出集 238 张）：单字符 `98.63%`，整张四位验证码 `94.96%`（226/238）。同一天更早的 354 张基线是单字符 `86.97%`、整图 `57.75%`。
+
+由于图片验证码在发短信之前就被校验，识别失败只花一次 `captchaImage` 请求，不消耗短信；默认最多尝试 3 张图，按 94.96% 算三张全错的概率约万分之一。继续增加标注样本后，应重新执行上面的训练和评估命令，只以留出集结果判断是否改善。
 
 不要只看逐字符或 `binary_accuracy`。启用无人值守之前，应让独立验证集的整图准确率稳定达到你能接受的水平。实际需要多少标注取决于字符覆盖和验证码变化，不能预先保证固定数量。
 
@@ -160,7 +185,7 @@ TEMP_MAIL_SITE_PASSWORD=
 TEMP_MAIL_RECIPIENT=
 TEMP_MAIL_ALLOWED_SENDER=support@neofantasy.online
 TEMP_MAIL_REQUIRED_TEXT=宁波舟山港
-TEMP_MAIL_REQUIRED_COPIES=2
+TEMP_MAIL_REQUIRED_COPIES=1
 ```
 
 确认 CNN 推理和所选短信读取源分别测试通过后，最后才改为：

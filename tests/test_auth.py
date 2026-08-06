@@ -52,20 +52,26 @@ class AuthTests(unittest.TestCase):
             normalize_answer("99HPE", config)
 
     def test_npedi_login_contract(self):
+        """The image captcha guards getSms, so a misread retries without an SMS."""
         requests = []
+        sms_sent = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
-            if request.url.path.endswith("/getSms"):
-                return httpx.Response(200, json={"code": 200, "data": None})
             if request.url.path.endswith("/captchaImage"):
                 return httpx.Response(200, json={"code": 200, "data": {
                     "uuid": "challenge-id",
                     "img": base64.b64encode(b"jpeg").decode(),
                 }})
+            if request.url.path.endswith("/user/getSms"):
+                # Reject the first image answer the way the site does.
+                if not sms_sent:
+                    sms_sent.append(None)
+                    return httpx.Response(200, json={"code": 400, "msg": "图片验证码错误", "data": None})
+                return httpx.Response(200, json={"code": 200, "data": None})
             return httpx.Response(200, json={"code": 200, "data": {"token": "new-token"}})
 
-        client = httpx.Client(base_url="https://www.npedi.com/onesite-api", transport=httpx.MockTransport(handler))
+        client = httpx.Client(base_url="https://www.npedi.com/portal-api", transport=httpx.MockTransport(handler))
         auth = NpediAuthenticator(
             base_url="https://www.npedi.com",
             mobile="13800138000",
@@ -75,11 +81,48 @@ class AuthTests(unittest.TestCase):
         )
 
         self.assertEqual(auth.login(), "new-token")
-        self.assertEqual(requests[0].url.path, "/onesite-api/getSms")
-        self.assertEqual(requests[0].url.params["mobile"], "13800138000")
-        self.assertEqual(requests[2].url.params["code"], "7")
-        self.assertEqual(requests[2].url.params["password"], "918273")
-        self.assertEqual(requests[2].url.params["uuid"], "challenge-id")
+        paths = [r.url.path for r in requests]
+        self.assertEqual(paths, [
+            "/portal-api/captchaImage",
+            "/portal-api/user/getSms",   # rejected image answer
+            "/portal-api/captchaImage",
+            "/portal-api/user/getSms",   # accepted, one SMS only
+            "/portal-api/captchaImage",
+            "/portal-api/login",
+        ])
+        self.assertEqual(paths.count("/portal-api/user/getSms"), 2)
+        sms = requests[3].url
+        self.assertEqual(sms.params["mobile"], "13800138000")
+        self.assertEqual(sms.params["code2"], "7")
+        self.assertEqual(sms.params["uuid2"], "challenge-id")
+        self.assertEqual(sms.params["type"], "1")
+        login = requests[5].url
+        self.assertEqual(login.params["mobile"], "13800138000")
+        self.assertEqual(login.params["code"], "918273")     # SMS code
+        self.assertEqual(login.params["code2"], "7")         # image captcha
+        self.assertEqual(login.params["uuid"], "challenge-id")
+
+    def test_login_stops_instead_of_retrying_a_bad_sms_code(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/captchaImage"):
+                return httpx.Response(200, json={"code": 200, "data": {
+                    "uuid": "challenge-id",
+                    "img": base64.b64encode(b"jpeg").decode(),
+                }})
+            if request.url.path.endswith("/user/getSms"):
+                return httpx.Response(200, json={"code": 200, "data": None})
+            return httpx.Response(200, json={"code": 400, "msg": "验证码不存在或其他错误", "data": None})
+
+        client = httpx.Client(base_url="https://www.npedi.com/portal-api", transport=httpx.MockTransport(handler))
+        auth = NpediAuthenticator(
+            base_url="https://www.npedi.com",
+            mobile="13800138000",
+            captcha_solver=FixedSolver(),
+            otp_reader=FixedOtp(),
+            client=client,
+        )
+        with self.assertRaises(AutoLoginError):
+            auth.login()
 
     def test_telegram_reader_rejects_wrong_chat_and_sender(self):
         updates = {

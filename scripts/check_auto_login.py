@@ -25,7 +25,8 @@ def main() -> int:
         checks.append(("temp-mail recipient", bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", cfg.temp_mail_recipient)), "set TEMP_MAIL_RECIPIENT"))
         checks.append(("temp-mail sender filter", bool(cfg.temp_mail_allowed_sender), "set TEMP_MAIL_ALLOWED_SENDER"))
         checks.append(("temp-mail NPEDI marker", bool(cfg.temp_mail_required_text), "set TEMP_MAIL_REQUIRED_TEXT"))
-        checks.append(("duplicate mail confirmation", cfg.temp_mail_required_copies == 2, "set TEMP_MAIL_REQUIRED_COPIES=2"))
+        # SmsForwarder does not reliably send two copies, so 1 is a valid setting.
+        checks.append(("required mail copies", 1 <= cfg.temp_mail_required_copies <= 3, "set TEMP_MAIL_REQUIRED_COPIES=1"))
     elif cfg.otp_reader_backend == "telegram":
         checks.append(("Telegram Bot B token", bool(re.fullmatch(r"\d+:[A-Za-z0-9_-]{20,}", cfg.telegram_reader_bot_token)), "set TELEGRAM_READER_BOT_TOKEN"))
         checks.append(("Telegram chat ID", bool(re.fullmatch(r"-?\d+", cfg.telegram_chat_id)), "set TELEGRAM_CHAT_ID"))

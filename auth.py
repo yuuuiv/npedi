@@ -356,12 +356,12 @@ class NpediAuthenticator:
         self.captcha_attempts = max(1, min(captcha_attempts, 5))
         self._owns_client = client is None
         self.client = client or httpx.Client(
-            base_url=base_url.rstrip("/") + "/onesite-api",
+            base_url=base_url.rstrip("/") + "/portal-api",
             timeout=timeout_seconds,
             headers={
                 "Accept": "application/json, text/plain, */*",
                 "User-Agent": DEFAULT_UA,
-                "Referer": base_url.rstrip("/") + "/onesite/login",
+                "Referer": base_url.rstrip("/") + "/index",
             },
             follow_redirects=False,
         )
@@ -398,34 +398,80 @@ class NpediAuthenticator:
             raise AutoLoginError("captchaImage returned invalid base64") from exc
         return CaptchaChallenge(uuid=uuid, image=image)
 
+    @staticmethod
+    def _payload(response: httpx.Response, endpoint: str) -> dict[str, Any]:
+        if response.status_code != 200:
+            raise AutoLoginError(f"{endpoint} returned HTTP {response.status_code}")
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise AutoLoginError(f"{endpoint} returned non-JSON") from exc
+        return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _is_captcha_error(payload: dict[str, Any]) -> bool:
+        """The site rejects a bad image answer with a 图片验证码 message."""
+        return "图片验证码" in str(payload.get("msg") or "")
+
     def send_sms(self) -> int:
-        not_before = int(time.time()) - 2
-        self._successful_payload(self.client.get("/getSms", params={"mobile": self.mobile}), "getSms")
-        return not_before
+        """Solve the image captcha, then request exactly one SMS.
+
+        The site validates the image captcha *before* sending, so a misread
+        costs only a fresh image, never an SMS.
+        """
+        last = ""
+        for _ in range(self.captcha_attempts):
+            challenge = self.fetch_captcha()
+            not_before = int(time.time()) - 2
+            payload = self._payload(
+                self.client.get(
+                    "/user/getSms",
+                    params={
+                        "mobile": self.mobile,
+                        "code2": self.captcha_solver.solve(challenge.image),
+                        "uuid2": challenge.uuid,
+                        "type": "1",
+                    },
+                ),
+                "getSms",
+            )
+            if payload.get("code") == 200:
+                return not_before
+            last = str(payload.get("msg") or payload.get("code"))
+            if not self._is_captcha_error(payload):
+                raise AutoLoginError(f"getSms refused the request: {last}")
+        raise AutoLoginError(f"image captcha rejected after {self.captcha_attempts} attempts: {last}")
 
     def login(self) -> str:
         not_before = self.send_sms()
         otp = self.otp_reader.wait_for_code(not_before=not_before)
+        last = ""
         for _ in range(self.captcha_attempts):
             challenge = self.fetch_captcha()
-            captcha = self.captcha_solver.solve(challenge.image)
-            response = self.client.post(
-                "/login",
-                params={
-                    "mobile": self.mobile,
-                    "code": captcha,
-                    "password": otp,
-                    "uuid": challenge.uuid,
-                },
+            payload = self._payload(
+                self.client.post(
+                    "/login",
+                    params={
+                        "mobile": self.mobile,
+                        "username": "",
+                        "password": "",
+                        "code": otp,
+                        "code2": self.captcha_solver.solve(challenge.image),
+                        "uuid": challenge.uuid,
+                    },
+                ),
+                "login",
             )
-            if response.status_code != 200:
-                raise AutoLoginError(f"login returned HTTP {response.status_code}")
-            payload = response.json()
-            token = ((payload.get("data") or {}).get("token") if isinstance(payload, dict) else None)
+            token = (payload.get("data") or {}).get("token")
             if payload.get("code") == 200 and isinstance(token, str) and token.strip():
                 return token.strip()
+            last = str(payload.get("msg") or payload.get("code"))
+            if not self._is_captcha_error(payload):
+                # A wrong or expired SMS code will not fix itself; stop before
+                # burning login attempts on the account.
+                raise AutoLoginError(f"login refused the request: {last}")
             # A bad image answer gets a fresh challenge; SMS is requested only once.
-        raise AutoLoginError("NPEDI login failed after the configured captcha attempts")
+        raise AutoLoginError(f"NPEDI login failed after the configured captcha attempts: {last}")
 
 
 def update_env_values(path: Path, values: dict[str, str]) -> None:
