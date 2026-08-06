@@ -29,7 +29,6 @@ def main() -> int:
     import tensorflow as tf
 
     config = CnnConfig.load(args.config)
-    tf.keras.utils.set_random_seed(config.random_seed)
     images, labels, paths = load_labeled_dataset(config)
     train_indices, validation_indices = split_indices(len(paths), config)
     if len(train_indices) < 2:
@@ -52,11 +51,11 @@ def main() -> int:
             filepath=config.model_weights,
             save_weights_only=True,
             save_best_only=True,
-            monitor="val_whole_captcha_accuracy",
+            monitor="val_categorical_accuracy",
             mode="max",
         ),
         tf.keras.callbacks.EarlyStopping(
-            monitor="val_whole_captcha_accuracy",
+            monitor="val_categorical_accuracy",
             mode="max",
             patience=25,
             restore_best_weights=True,

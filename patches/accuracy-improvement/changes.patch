@@ -1,0 +1,145 @@
+diff --git a/scripts/train_npedi_captcha_cnn.py b/scripts/train_npedi_captcha_cnn.py
+index 685fef4..198d9ec 100644
+--- a/scripts/train_npedi_captcha_cnn.py
++++ b/scripts/train_npedi_captcha_cnn.py
+@@ -29,6 +29,7 @@ def main() -> int:
+     import tensorflow as tf
+ 
+     config = CnnConfig.load(args.config)
++    tf.keras.utils.set_random_seed(config.random_seed)
+     images, labels, paths = load_labeled_dataset(config)
+     train_indices, validation_indices = split_indices(len(paths), config)
+     if len(train_indices) < 2:
+@@ -51,11 +52,11 @@ def main() -> int:
+             filepath=config.model_weights,
+             save_weights_only=True,
+             save_best_only=True,
+-            monitor="val_categorical_accuracy",
++            monitor="val_whole_captcha_accuracy",
+             mode="max",
+         ),
+         tf.keras.callbacks.EarlyStopping(
+-            monitor="val_categorical_accuracy",
++            monitor="val_whole_captcha_accuracy",
+             mode="max",
+             patience=25,
+             restore_best_weights=True,
+diff --git a/scripts/cross_validate_npedi_captcha_cnn.py b/scripts/cross_validate_npedi_captcha_cnn.py
+new file mode 100644
+index 0000000..1bb65ee
+--- /dev/null
++++ b/scripts/cross_validate_npedi_captcha_cnn.py
+@@ -0,0 +1,113 @@
++"""Train deterministic K-fold baselines without touching the final test set."""
++from __future__ import annotations
++
++import argparse
++import json
++import statistics
++import sys
++from pathlib import Path
++
++PROJECT_ROOT = Path(__file__).resolve().parents[1]
++if str(PROJECT_ROOT) not in sys.path:
++    sys.path.insert(0, str(PROJECT_ROOT))
++
++from captcha_cnn.model import (
++    CnnConfig,
++    WholeCaptchaAccuracy,
++    build_model,
++    decode_predictions,
++    extract_character_crops,
++    iter_labels,
++    load_labeled_dataset,
++)
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "captcha_cnn" / "npedi.json")
++    parser.add_argument("--folds", type=int, default=5)
++    parser.add_argument("--epochs", type=int)
++    parser.add_argument("--output", type=Path, default=PROJECT_ROOT / "captcha-model" / "cross-validation")
++    args = parser.parse_args()
++
++    import numpy as np
++    import tensorflow as tf
++
++    config = CnnConfig.load(args.config)
++    images, labels, paths = load_labeled_dataset(config)
++    if not 2 <= args.folds <= len(paths):
++        parser.error(f"--folds must be between 2 and {len(paths)}")
++    epochs = args.epochs or config.epochs
++    if epochs < 1:
++        parser.error("--epochs must be positive")
++
++    args.output.mkdir(parents=True, exist_ok=True)
++    rng = np.random.default_rng(config.random_seed)
++    folds = np.array_split(rng.permutation(len(paths)), args.folds)
++    results = []
++
++    for fold, validation_indices in enumerate(folds, 1):
++        tf.keras.backend.clear_session()
++        tf.keras.utils.set_random_seed(config.random_seed + fold)
++        train_indices = np.concatenate([part for index, part in enumerate(folds, 1) if index != fold])
++        validation_labels = iter_labels([paths[index] for index in validation_indices], config)
++        train_x = extract_character_crops(images[train_indices], config)
++        train_y = labels[train_indices].reshape(-1, len(config.labels))
++        validation_x = extract_character_crops(images[validation_indices], config)
++        validation_y = labels[validation_indices].reshape(-1, len(config.labels))
++        weights = args.output / f"fold-{fold}.weights.h5"
++        model = build_model(config)
++        history = model.fit(
++            train_x,
++            train_y,
++            batch_size=config.batch_size,
++            epochs=epochs,
++            validation_data=(validation_x, validation_y),
++            callbacks=[
++                WholeCaptchaAccuracy.create(validation_x, validation_labels, config),
++                tf.keras.callbacks.ModelCheckpoint(
++                    weights, save_weights_only=True, save_best_only=True,
++                    monitor="val_whole_captcha_accuracy", mode="max",
++                ),
++                tf.keras.callbacks.EarlyStopping(
++                    monitor="val_whole_captcha_accuracy", mode="max", patience=25,
++                    restore_best_weights=True,
++                ),
++            ],
++            verbose=2,
++        )
++        model.load_weights(weights)
++        predicted = decode_predictions(model.predict(validation_x, verbose=0), config)
++        whole_correct = sum(actual == guess for actual, guess in zip(validation_labels, predicted))
++        character_correct = sum(
++            actual == guess
++            for expected, predicted_label in zip(validation_labels, predicted)
++            for actual, guess in zip(expected, predicted_label)
++        )
++        whole_history = history.history["val_whole_captcha_accuracy"]
++        results.append({
++            "fold": fold,
++            "training_images": len(train_indices),
++            "validation_images": len(validation_indices),
++            "best_epoch": whole_history.index(max(whole_history)) + 1,
++            "whole_accuracy": whole_correct / len(validation_indices),
++            "character_accuracy": character_correct / (len(validation_indices) * config.fixed_length),
++            "weights": str(weights.resolve()),
++        })
++
++    whole = [result["whole_accuracy"] for result in results]
++    report = {
++        "images": len(paths),
++        "folds": args.folds,
++        "mean_whole_accuracy": statistics.fmean(whole),
++        "std_whole_accuracy": statistics.pstdev(whole),
++        "results": results,
++    }
++    report_path = args.output / "results.json"
++    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
++    print(json.dumps(report, ensure_ascii=False, indent=2))
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())

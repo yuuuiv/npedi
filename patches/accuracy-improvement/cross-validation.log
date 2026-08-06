@@ -1,0 +1,1530 @@
+2026-08-06 22:33:44.984231: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING:tensorflow:From C:\Users\yuuuiv\Downloads\npedi\npedi-train\.captcha-cnn-venv\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+WARNING:tensorflow:From C:\Users\yuuuiv\Downloads\npedi\npedi-train\.captcha-cnn-venv\Lib\site-packages\keras\src\backend.py:277: The name tf.reset_default_graph is deprecated. Please use tf.compat.v1.reset_default_graph instead.
+
+WARNING:tensorflow:From C:\Users\yuuuiv\Downloads\npedi\npedi-train\.captcha-cnn-venv\Lib\site-packages\keras\src\layers\pooling\max_pooling2d.py:161: The name tf.nn.max_pool is deprecated. Please use tf.nn.max_pool2d instead.
+
+2026-08-06 22:33:49.169660: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE SSE2 SSE3 SSE4.1 SSE4.2 AVX2 AVX_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Epoch 1/100
+WARNING:tensorflow:From C:\Users\yuuuiv\Downloads\npedi\npedi-train\.captcha-cnn-venv\Lib\site-packages\keras\src\utils\tf_utils.py:492: The name tf.ragged.RaggedTensorValue is deprecated. Please use tf.compat.v1.ragged.RaggedTensorValue instead.
+
+WARNING:tensorflow:From C:\Users\yuuuiv\Downloads\npedi\npedi-train\.captcha-cnn-venv\Lib\site-packages\keras\src\engine\base_layer_utils.py:384: The name tf.executing_eagerly_outside_functions is deprecated. Please use tf.compat.v1.executing_eagerly_outside_functions instead.
+
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 2s - loss: 3.4685 - categorical_accuracy: 0.0287 - val_loss: 3.4656 - val_categorical_accuracy: 0.0273 - val_whole_captcha_accuracy: 0.0000e+00 - 2s/epoch - 79ms/step
+Epoch 2/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4644 - categorical_accuracy: 0.0408 - val_loss: 3.4659 - val_categorical_accuracy: 0.0273 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 36ms/step
+Epoch 3/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4620 - categorical_accuracy: 0.0405 - val_loss: 3.4672 - val_categorical_accuracy: 0.0273 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 34ms/step
+Epoch 4/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4584 - categorical_accuracy: 0.0408 - val_loss: 3.4649 - val_categorical_accuracy: 0.0273 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 34ms/step
+Epoch 5/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4396 - categorical_accuracy: 0.0521 - val_loss: 3.4129 - val_categorical_accuracy: 0.0935 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 35ms/step
+Epoch 6/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.2651 - categorical_accuracy: 0.1129 - val_loss: 2.9643 - val_categorical_accuracy: 0.1891 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 35ms/step
+Epoch 7/100
+ - val_whole_captcha_accuracy: 0.0084
+30/30 - 1s - loss: 2.7532 - categorical_accuracy: 0.2011 - val_loss: 2.3566 - val_categorical_accuracy: 0.2815 - val_whole_captcha_accuracy: 0.0084 - 1s/epoch - 42ms/step
+Epoch 8/100
+ - val_whole_captcha_accuracy: 0.0294
+30/30 - 1s - loss: 2.3765 - categorical_accuracy: 0.2997 - val_loss: 2.0266 - val_categorical_accuracy: 0.4086 - val_whole_captcha_accuracy: 0.0294 - 1s/epoch - 37ms/step
+Epoch 9/100
+ - val_whole_captcha_accuracy: 0.0966
+30/30 - 1s - loss: 2.0317 - categorical_accuracy: 0.3882 - val_loss: 1.6525 - val_categorical_accuracy: 0.5231 - val_whole_captcha_accuracy: 0.0966 - 1s/epoch - 39ms/step
+Epoch 10/100
+ - val_whole_captcha_accuracy: 0.1008
+30/30 - 1s - loss: 1.7769 - categorical_accuracy: 0.4555 - val_loss: 1.3639 - val_categorical_accuracy: 0.5819 - val_whole_captcha_accuracy: 0.1008 - 1s/epoch - 39ms/step
+Epoch 11/100
+ - val_whole_captcha_accuracy: 0.2101
+30/30 - 1s - loss: 1.5200 - categorical_accuracy: 0.5229 - val_loss: 1.1509 - val_categorical_accuracy: 0.6565 - val_whole_captcha_accuracy: 0.2101 - 1s/epoch - 38ms/step
+Epoch 12/100
+ - val_whole_captcha_accuracy: 0.3109
+30/30 - 1s - loss: 1.3604 - categorical_accuracy: 0.5732 - val_loss: 0.9479 - val_categorical_accuracy: 0.7227 - val_whole_captcha_accuracy: 0.3109 - 1s/epoch - 42ms/step
+Epoch 13/100
+ - val_whole_captcha_accuracy: 0.3866
+30/30 - 1s - loss: 1.1638 - categorical_accuracy: 0.6247 - val_loss: 0.7904 - val_categorical_accuracy: 0.7616 - val_whole_captcha_accuracy: 0.3866 - 1s/epoch - 39ms/step
+Epoch 14/100
+ - val_whole_captcha_accuracy: 0.4748
+30/30 - 1s - loss: 1.0197 - categorical_accuracy: 0.6797 - val_loss: 0.6882 - val_categorical_accuracy: 0.8078 - val_whole_captcha_accuracy: 0.4748 - 988ms/epoch - 33ms/step
+Epoch 15/100
+ - val_whole_captcha_accuracy: 0.5378
+30/30 - 1s - loss: 0.9062 - categorical_accuracy: 0.7142 - val_loss: 0.5895 - val_categorical_accuracy: 0.8424 - val_whole_captcha_accuracy: 0.5378 - 1s/epoch - 34ms/step
+Epoch 16/100
+ - val_whole_captcha_accuracy: 0.5798
+30/30 - 1s - loss: 0.8216 - categorical_accuracy: 0.7379 - val_loss: 0.5130 - val_categorical_accuracy: 0.8603 - val_whole_captcha_accuracy: 0.5798 - 989ms/epoch - 33ms/step
+Epoch 17/100
+ - val_whole_captcha_accuracy: 0.5672
+30/30 - 1s - loss: 0.7203 - categorical_accuracy: 0.7668 - val_loss: 0.5011 - val_categorical_accuracy: 0.8603 - val_whole_captcha_accuracy: 0.5672 - 1s/epoch - 37ms/step
+Epoch 18/100
+ - val_whole_captcha_accuracy: 0.6429
+30/30 - 1s - loss: 0.6961 - categorical_accuracy: 0.7763 - val_loss: 0.4164 - val_categorical_accuracy: 0.8887 - val_whole_captcha_accuracy: 0.6429 - 1s/epoch - 40ms/step
+Epoch 19/100
+ - val_whole_captcha_accuracy: 0.6513
+30/30 - 1s - loss: 0.6319 - categorical_accuracy: 0.7992 - val_loss: 0.3811 - val_categorical_accuracy: 0.8950 - val_whole_captcha_accuracy: 0.6513 - 1s/epoch - 39ms/step
+Epoch 20/100
+ - val_whole_captcha_accuracy: 0.6429
+30/30 - 1s - loss: 0.5684 - categorical_accuracy: 0.8139 - val_loss: 0.3780 - val_categorical_accuracy: 0.8897 - val_whole_captcha_accuracy: 0.6429 - 1s/epoch - 36ms/step
+Epoch 21/100
+ - val_whole_captcha_accuracy: 0.6555
+30/30 - 1s - loss: 0.5054 - categorical_accuracy: 0.8403 - val_loss: 0.3577 - val_categorical_accuracy: 0.8939 - val_whole_captcha_accuracy: 0.6555 - 1s/epoch - 39ms/step
+Epoch 22/100
+ - val_whole_captcha_accuracy: 0.7773
+30/30 - 1s - loss: 0.4708 - categorical_accuracy: 0.8513 - val_loss: 0.2812 - val_categorical_accuracy: 0.9307 - val_whole_captcha_accuracy: 0.7773 - 1s/epoch - 41ms/step
+Epoch 23/100
+ - val_whole_captcha_accuracy: 0.7101
+30/30 - 1s - loss: 0.4562 - categorical_accuracy: 0.8542 - val_loss: 0.3046 - val_categorical_accuracy: 0.9128 - val_whole_captcha_accuracy: 0.7101 - 1s/epoch - 35ms/step
+Epoch 24/100
+ - val_whole_captcha_accuracy: 0.7689
+30/30 - 1s - loss: 0.4108 - categorical_accuracy: 0.8708 - val_loss: 0.2644 - val_categorical_accuracy: 0.9265 - val_whole_captcha_accuracy: 0.7689 - 1s/epoch - 38ms/step
+Epoch 25/100
+ - val_whole_captcha_accuracy: 0.7479
+30/30 - 1s - loss: 0.3873 - categorical_accuracy: 0.8732 - val_loss: 0.2655 - val_categorical_accuracy: 0.9275 - val_whole_captcha_accuracy: 0.7479 - 1s/epoch - 36ms/step
+Epoch 26/100
+ - val_whole_captcha_accuracy: 0.7983
+30/30 - 1s - loss: 0.3743 - categorical_accuracy: 0.8737 - val_loss: 0.2330 - val_categorical_accuracy: 0.9422 - val_whole_captcha_accuracy: 0.7983 - 1s/epoch - 37ms/step
+Epoch 27/100
+ - val_whole_captcha_accuracy: 0.7941
+30/30 - 1s - loss: 0.3897 - categorical_accuracy: 0.8771 - val_loss: 0.2357 - val_categorical_accuracy: 0.9391 - val_whole_captcha_accuracy: 0.7941 - 1s/epoch - 35ms/step
+Epoch 28/100
+ - val_whole_captcha_accuracy: 0.7773
+30/30 - 1s - loss: 0.3326 - categorical_accuracy: 0.8942 - val_loss: 0.2338 - val_categorical_accuracy: 0.9349 - val_whole_captcha_accuracy: 0.7773 - 1s/epoch - 35ms/step
+Epoch 29/100
+ - val_whole_captcha_accuracy: 0.7857
+30/30 - 1s - loss: 0.3218 - categorical_accuracy: 0.8926 - val_loss: 0.2263 - val_categorical_accuracy: 0.9359 - val_whole_captcha_accuracy: 0.7857 - 1s/epoch - 34ms/step
+Epoch 30/100
+ - val_whole_captcha_accuracy: 0.8319
+30/30 - 1s - loss: 0.3211 - categorical_accuracy: 0.8984 - val_loss: 0.2023 - val_categorical_accuracy: 0.9496 - val_whole_captcha_accuracy: 0.8319 - 1s/epoch - 36ms/step
+Epoch 31/100
+ - val_whole_captcha_accuracy: 0.7857
+30/30 - 1s - loss: 0.2834 - categorical_accuracy: 0.9089 - val_loss: 0.2070 - val_categorical_accuracy: 0.9391 - val_whole_captcha_accuracy: 0.7857 - 1s/epoch - 35ms/step
+Epoch 32/100
+ - val_whole_captcha_accuracy: 0.8151
+30/30 - 1s - loss: 0.2747 - categorical_accuracy: 0.9113 - val_loss: 0.2034 - val_categorical_accuracy: 0.9454 - val_whole_captcha_accuracy: 0.8151 - 1s/epoch - 34ms/step
+Epoch 33/100
+ - val_whole_captcha_accuracy: 0.8319
+30/30 - 1s - loss: 0.2702 - categorical_accuracy: 0.9129 - val_loss: 0.2035 - val_categorical_accuracy: 0.9517 - val_whole_captcha_accuracy: 0.8319 - 1s/epoch - 36ms/step
+Epoch 34/100
+ - val_whole_captcha_accuracy: 0.8277
+30/30 - 1s - loss: 0.2625 - categorical_accuracy: 0.9205 - val_loss: 0.1735 - val_categorical_accuracy: 0.9517 - val_whole_captcha_accuracy: 0.8277 - 1s/epoch - 34ms/step
+Epoch 35/100
+ - val_whole_captcha_accuracy: 0.8319
+30/30 - 1s - loss: 0.2528 - categorical_accuracy: 0.9232 - val_loss: 0.1737 - val_categorical_accuracy: 0.9548 - val_whole_captcha_accuracy: 0.8319 - 1s/epoch - 35ms/step
+Epoch 36/100
+ - val_whole_captcha_accuracy: 0.8319
+30/30 - 1s - loss: 0.2345 - categorical_accuracy: 0.9261 - val_loss: 0.1726 - val_categorical_accuracy: 0.9517 - val_whole_captcha_accuracy: 0.8319 - 990ms/epoch - 33ms/step
+Epoch 37/100
+ - val_whole_captcha_accuracy: 0.7983
+30/30 - 1s - loss: 0.2263 - categorical_accuracy: 0.9292 - val_loss: 0.1892 - val_categorical_accuracy: 0.9433 - val_whole_captcha_accuracy: 0.7983 - 1s/epoch - 35ms/step
+Epoch 38/100
+ - val_whole_captcha_accuracy: 0.8319
+30/30 - 1s - loss: 0.2217 - categorical_accuracy: 0.9332 - val_loss: 0.1713 - val_categorical_accuracy: 0.9506 - val_whole_captcha_accuracy: 0.8319 - 1s/epoch - 40ms/step
+Epoch 39/100
+ - val_whole_captcha_accuracy: 0.8403
+30/30 - 1s - loss: 0.2140 - categorical_accuracy: 0.9284 - val_loss: 0.1670 - val_categorical_accuracy: 0.9548 - val_whole_captcha_accuracy: 0.8403 - 1s/epoch - 39ms/step
+Epoch 40/100
+ - val_whole_captcha_accuracy: 0.8403
+30/30 - 1s - loss: 0.2046 - categorical_accuracy: 0.9374 - val_loss: 0.1667 - val_categorical_accuracy: 0.9538 - val_whole_captcha_accuracy: 0.8403 - 1s/epoch - 36ms/step
+Epoch 41/100
+ - val_whole_captcha_accuracy: 0.8235
+30/30 - 1s - loss: 0.2116 - categorical_accuracy: 0.9347 - val_loss: 0.1626 - val_categorical_accuracy: 0.9506 - val_whole_captcha_accuracy: 0.8235 - 1s/epoch - 37ms/step
+Epoch 42/100
+ - val_whole_captcha_accuracy: 0.8571
+30/30 - 1s - loss: 0.1896 - categorical_accuracy: 0.9387 - val_loss: 0.1587 - val_categorical_accuracy: 0.9632 - val_whole_captcha_accuracy: 0.8571 - 1s/epoch - 40ms/step
+Epoch 43/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.1862 - categorical_accuracy: 0.9432 - val_loss: 0.1474 - val_categorical_accuracy: 0.9674 - val_whole_captcha_accuracy: 0.8824 - 1s/epoch - 37ms/step
+Epoch 44/100
+ - val_whole_captcha_accuracy: 0.8067
+30/30 - 1s - loss: 0.1891 - categorical_accuracy: 0.9408 - val_loss: 0.1662 - val_categorical_accuracy: 0.9496 - val_whole_captcha_accuracy: 0.8067 - 1s/epoch - 34ms/step
+Epoch 45/100
+ - val_whole_captcha_accuracy: 0.8571
+30/30 - 1s - loss: 0.1770 - categorical_accuracy: 0.9434 - val_loss: 0.1440 - val_categorical_accuracy: 0.9601 - val_whole_captcha_accuracy: 0.8571 - 1s/epoch - 34ms/step
+Epoch 46/100
+ - val_whole_captcha_accuracy: 0.8613
+30/30 - 1s - loss: 0.1675 - categorical_accuracy: 0.9471 - val_loss: 0.1454 - val_categorical_accuracy: 0.9622 - val_whole_captcha_accuracy: 0.8613 - 1s/epoch - 34ms/step
+Epoch 47/100
+ - val_whole_captcha_accuracy: 0.8529
+30/30 - 1s - loss: 0.1648 - categorical_accuracy: 0.9500 - val_loss: 0.1396 - val_categorical_accuracy: 0.9611 - val_whole_captcha_accuracy: 0.8529 - 1s/epoch - 34ms/step
+Epoch 48/100
+ - val_whole_captcha_accuracy: 0.8613
+30/30 - 1s - loss: 0.1448 - categorical_accuracy: 0.9534 - val_loss: 0.1398 - val_categorical_accuracy: 0.9632 - val_whole_captcha_accuracy: 0.8613 - 1s/epoch - 35ms/step
+Epoch 49/100
+ - val_whole_captcha_accuracy: 0.8697
+30/30 - 1s - loss: 0.1516 - categorical_accuracy: 0.9487 - val_loss: 0.1526 - val_categorical_accuracy: 0.9632 - val_whole_captcha_accuracy: 0.8697 - 1s/epoch - 36ms/step
+Epoch 50/100
+ - val_whole_captcha_accuracy: 0.8697
+30/30 - 1s - loss: 0.1526 - categorical_accuracy: 0.9521 - val_loss: 0.1409 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8697 - 1s/epoch - 34ms/step
+Epoch 51/100
+ - val_whole_captcha_accuracy: 0.8571
+30/30 - 1s - loss: 0.1300 - categorical_accuracy: 0.9584 - val_loss: 0.1301 - val_categorical_accuracy: 0.9611 - val_whole_captcha_accuracy: 0.8571 - 1s/epoch - 34ms/step
+Epoch 52/100
+ - val_whole_captcha_accuracy: 0.8697
+30/30 - 1s - loss: 0.1248 - categorical_accuracy: 0.9597 - val_loss: 0.1275 - val_categorical_accuracy: 0.9664 - val_whole_captcha_accuracy: 0.8697 - 1s/epoch - 34ms/step
+Epoch 53/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 1s - loss: 0.1321 - categorical_accuracy: 0.9600 - val_loss: 0.1259 - val_categorical_accuracy: 0.9643 - val_whole_captcha_accuracy: 0.8655 - 1s/epoch - 39ms/step
+Epoch 54/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 1s - loss: 0.1280 - categorical_accuracy: 0.9600 - val_loss: 0.1216 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8655 - 1s/epoch - 40ms/step
+Epoch 55/100
+ - val_whole_captcha_accuracy: 0.8782
+30/30 - 1s - loss: 0.1246 - categorical_accuracy: 0.9595 - val_loss: 0.1412 - val_categorical_accuracy: 0.9643 - val_whole_captcha_accuracy: 0.8782 - 1s/epoch - 43ms/step
+Epoch 56/100
+ - val_whole_captcha_accuracy: 0.8782
+30/30 - 1s - loss: 0.1399 - categorical_accuracy: 0.9537 - val_loss: 0.1329 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8782 - 1s/epoch - 43ms/step
+Epoch 57/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.1198 - categorical_accuracy: 0.9632 - val_loss: 0.1204 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8908 - 1s/epoch - 43ms/step
+Epoch 58/100
+ - val_whole_captcha_accuracy: 0.8866
+30/30 - 1s - loss: 0.1157 - categorical_accuracy: 0.9655 - val_loss: 0.1338 - val_categorical_accuracy: 0.9674 - val_whole_captcha_accuracy: 0.8866 - 1s/epoch - 35ms/step
+Epoch 59/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.1051 - categorical_accuracy: 0.9655 - val_loss: 0.1260 - val_categorical_accuracy: 0.9674 - val_whole_captcha_accuracy: 0.8824 - 960ms/epoch - 32ms/step
+Epoch 60/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 1s - loss: 0.1190 - categorical_accuracy: 0.9639 - val_loss: 0.1218 - val_categorical_accuracy: 0.9632 - val_whole_captcha_accuracy: 0.8655 - 929ms/epoch - 31ms/step
+Epoch 61/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.1049 - categorical_accuracy: 0.9689 - val_loss: 0.1328 - val_categorical_accuracy: 0.9674 - val_whole_captcha_accuracy: 0.8824 - 926ms/epoch - 31ms/step
+Epoch 62/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.1135 - categorical_accuracy: 0.9613 - val_loss: 0.1414 - val_categorical_accuracy: 0.9674 - val_whole_captcha_accuracy: 0.8824 - 948ms/epoch - 32ms/step
+Epoch 63/100
+ - val_whole_captcha_accuracy: 0.8739
+30/30 - 1s - loss: 0.0984 - categorical_accuracy: 0.9676 - val_loss: 0.1311 - val_categorical_accuracy: 0.9664 - val_whole_captcha_accuracy: 0.8739 - 981ms/epoch - 33ms/step
+Epoch 64/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0972 - categorical_accuracy: 0.9684 - val_loss: 0.1273 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8908 - 953ms/epoch - 32ms/step
+Epoch 65/100
+ - val_whole_captcha_accuracy: 0.8866
+30/30 - 1s - loss: 0.0996 - categorical_accuracy: 0.9679 - val_loss: 0.1210 - val_categorical_accuracy: 0.9706 - val_whole_captcha_accuracy: 0.8866 - 940ms/epoch - 31ms/step
+Epoch 66/100
+ - val_whole_captcha_accuracy: 0.8697
+30/30 - 1s - loss: 0.0954 - categorical_accuracy: 0.9692 - val_loss: 0.1311 - val_categorical_accuracy: 0.9664 - val_whole_captcha_accuracy: 0.8697 - 935ms/epoch - 31ms/step
+Epoch 67/100
+ - val_whole_captcha_accuracy: 0.8992
+30/30 - 1s - loss: 0.0950 - categorical_accuracy: 0.9718 - val_loss: 0.1266 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8992 - 985ms/epoch - 33ms/step
+Epoch 68/100
+ - val_whole_captcha_accuracy: 0.8992
+30/30 - 1s - loss: 0.0837 - categorical_accuracy: 0.9737 - val_loss: 0.1129 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8992 - 986ms/epoch - 33ms/step
+Epoch 69/100
+ - val_whole_captcha_accuracy: 0.8487
+30/30 - 1s - loss: 0.0927 - categorical_accuracy: 0.9689 - val_loss: 0.1240 - val_categorical_accuracy: 0.9590 - val_whole_captcha_accuracy: 0.8487 - 935ms/epoch - 31ms/step
+Epoch 70/100
+ - val_whole_captcha_accuracy: 0.8866
+30/30 - 1s - loss: 0.0808 - categorical_accuracy: 0.9771 - val_loss: 0.1260 - val_categorical_accuracy: 0.9685 - val_whole_captcha_accuracy: 0.8866 - 950ms/epoch - 32ms/step
+Epoch 71/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0833 - categorical_accuracy: 0.9761 - val_loss: 0.1163 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8908 - 938ms/epoch - 31ms/step
+Epoch 72/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0859 - categorical_accuracy: 0.9739 - val_loss: 0.1203 - val_categorical_accuracy: 0.9706 - val_whole_captcha_accuracy: 0.8908 - 927ms/epoch - 31ms/step
+Epoch 73/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.0842 - categorical_accuracy: 0.9758 - val_loss: 0.1060 - val_categorical_accuracy: 0.9769 - val_whole_captcha_accuracy: 0.9076 - 972ms/epoch - 32ms/step
+Epoch 74/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 1s - loss: 0.0851 - categorical_accuracy: 0.9718 - val_loss: 0.1472 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8655 - 999ms/epoch - 33ms/step
+Epoch 75/100
+ - val_whole_captcha_accuracy: 0.8782
+30/30 - 1s - loss: 0.0977 - categorical_accuracy: 0.9692 - val_loss: 0.1291 - val_categorical_accuracy: 0.9664 - val_whole_captcha_accuracy: 0.8782 - 931ms/epoch - 31ms/step
+Epoch 76/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0829 - categorical_accuracy: 0.9739 - val_loss: 0.1288 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8908 - 914ms/epoch - 30ms/step
+Epoch 77/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.0736 - categorical_accuracy: 0.9774 - val_loss: 0.1325 - val_categorical_accuracy: 0.9685 - val_whole_captcha_accuracy: 0.8824 - 930ms/epoch - 31ms/step
+Epoch 78/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0723 - categorical_accuracy: 0.9768 - val_loss: 0.1215 - val_categorical_accuracy: 0.9716 - val_whole_captcha_accuracy: 0.8908 - 931ms/epoch - 31ms/step
+Epoch 79/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 1s - loss: 0.0850 - categorical_accuracy: 0.9739 - val_loss: 0.1255 - val_categorical_accuracy: 0.9716 - val_whole_captcha_accuracy: 0.8950 - 1s/epoch - 34ms/step
+Epoch 80/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.0887 - categorical_accuracy: 0.9724 - val_loss: 0.1259 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8824 - 939ms/epoch - 31ms/step
+Epoch 81/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 1s - loss: 0.0684 - categorical_accuracy: 0.9768 - val_loss: 0.1302 - val_categorical_accuracy: 0.9643 - val_whole_captcha_accuracy: 0.8655 - 928ms/epoch - 31ms/step
+Epoch 82/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0736 - categorical_accuracy: 0.9737 - val_loss: 0.1144 - val_categorical_accuracy: 0.9716 - val_whole_captcha_accuracy: 0.8908 - 927ms/epoch - 31ms/step
+Epoch 83/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 1s - loss: 0.0637 - categorical_accuracy: 0.9789 - val_loss: 0.1082 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8950 - 923ms/epoch - 31ms/step
+Epoch 84/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.0668 - categorical_accuracy: 0.9808 - val_loss: 0.1196 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8824 - 969ms/epoch - 32ms/step
+Epoch 85/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.0650 - categorical_accuracy: 0.9792 - val_loss: 0.1221 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8824 - 1s/epoch - 35ms/step
+Epoch 86/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0742 - categorical_accuracy: 0.9774 - val_loss: 0.1323 - val_categorical_accuracy: 0.9706 - val_whole_captcha_accuracy: 0.8908 - 979ms/epoch - 33ms/step
+Epoch 87/100
+ - val_whole_captcha_accuracy: 0.8992
+30/30 - 1s - loss: 0.0686 - categorical_accuracy: 0.9803 - val_loss: 0.1229 - val_categorical_accuracy: 0.9748 - val_whole_captcha_accuracy: 0.8992 - 985ms/epoch - 33ms/step
+Epoch 88/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0666 - categorical_accuracy: 0.9789 - val_loss: 0.1233 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8908 - 950ms/epoch - 32ms/step
+Epoch 89/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0601 - categorical_accuracy: 0.9795 - val_loss: 0.1092 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8908 - 979ms/epoch - 33ms/step
+Epoch 90/100
+ - val_whole_captcha_accuracy: 0.8739
+30/30 - 1s - loss: 0.0721 - categorical_accuracy: 0.9766 - val_loss: 0.1326 - val_categorical_accuracy: 0.9674 - val_whole_captcha_accuracy: 0.8739 - 1s/epoch - 36ms/step
+Epoch 91/100
+ - val_whole_captcha_accuracy: 0.8992
+30/30 - 1s - loss: 0.0638 - categorical_accuracy: 0.9792 - val_loss: 0.1221 - val_categorical_accuracy: 0.9737 - val_whole_captcha_accuracy: 0.8992 - 979ms/epoch - 33ms/step
+Epoch 92/100
+ - val_whole_captcha_accuracy: 0.8866
+30/30 - 1s - loss: 0.0617 - categorical_accuracy: 0.9821 - val_loss: 0.1242 - val_categorical_accuracy: 0.9716 - val_whole_captcha_accuracy: 0.8866 - 1s/epoch - 33ms/step
+Epoch 93/100
+ - val_whole_captcha_accuracy: 0.9034
+30/30 - 1s - loss: 0.0545 - categorical_accuracy: 0.9837 - val_loss: 0.1151 - val_categorical_accuracy: 0.9748 - val_whole_captcha_accuracy: 0.9034 - 1s/epoch - 37ms/step
+Epoch 94/100
+ - val_whole_captcha_accuracy: 0.9118
+30/30 - 1s - loss: 0.0616 - categorical_accuracy: 0.9805 - val_loss: 0.1275 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9118 - 1s/epoch - 36ms/step
+Epoch 95/100
+ - val_whole_captcha_accuracy: 0.9118
+30/30 - 1s - loss: 0.0684 - categorical_accuracy: 0.9795 - val_loss: 0.1105 - val_categorical_accuracy: 0.9769 - val_whole_captcha_accuracy: 0.9118 - 1s/epoch - 38ms/step
+Epoch 96/100
+ - val_whole_captcha_accuracy: 0.8866
+30/30 - 1s - loss: 0.0644 - categorical_accuracy: 0.9808 - val_loss: 0.1310 - val_categorical_accuracy: 0.9706 - val_whole_captcha_accuracy: 0.8866 - 1s/epoch - 35ms/step
+Epoch 97/100
+ - val_whole_captcha_accuracy: 0.8992
+30/30 - 1s - loss: 0.0593 - categorical_accuracy: 0.9811 - val_loss: 0.1165 - val_categorical_accuracy: 0.9748 - val_whole_captcha_accuracy: 0.8992 - 1s/epoch - 35ms/step
+Epoch 98/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 1s - loss: 0.0568 - categorical_accuracy: 0.9832 - val_loss: 0.1089 - val_categorical_accuracy: 0.9706 - val_whole_captcha_accuracy: 0.8950 - 1s/epoch - 35ms/step
+Epoch 99/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 1s - loss: 0.0516 - categorical_accuracy: 0.9832 - val_loss: 0.1151 - val_categorical_accuracy: 0.9737 - val_whole_captcha_accuracy: 0.8950 - 1s/epoch - 34ms/step
+Epoch 100/100
+ - val_whole_captcha_accuracy: 0.9034
+30/30 - 1s - loss: 0.0666 - categorical_accuracy: 0.9787 - val_loss: 0.1202 - val_categorical_accuracy: 0.9748 - val_whole_captcha_accuracy: 0.9034 - 1s/epoch - 37ms/step
+Epoch 1/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 2s - loss: 3.4684 - categorical_accuracy: 0.0295 - val_loss: 3.4640 - val_categorical_accuracy: 0.0336 - val_whole_captcha_accuracy: 0.0000e+00 - 2s/epoch - 63ms/step
+Epoch 2/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4645 - categorical_accuracy: 0.0303 - val_loss: 3.4632 - val_categorical_accuracy: 0.0525 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 33ms/step
+Epoch 3/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4642 - categorical_accuracy: 0.0345 - val_loss: 3.4632 - val_categorical_accuracy: 0.0494 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 35ms/step
+Epoch 4/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4620 - categorical_accuracy: 0.0416 - val_loss: 3.4552 - val_categorical_accuracy: 0.0588 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 36ms/step
+Epoch 5/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4355 - categorical_accuracy: 0.0618 - val_loss: 3.3710 - val_categorical_accuracy: 0.1029 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 34ms/step
+Epoch 6/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.1757 - categorical_accuracy: 0.1271 - val_loss: 2.8362 - val_categorical_accuracy: 0.1723 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 34ms/step
+Epoch 7/100
+ - val_whole_captcha_accuracy: 0.0042
+30/30 - 1s - loss: 2.6360 - categorical_accuracy: 0.2268 - val_loss: 2.2427 - val_categorical_accuracy: 0.2952 - val_whole_captcha_accuracy: 0.0042 - 1s/epoch - 36ms/step
+Epoch 8/100
+ - val_whole_captcha_accuracy: 0.0336
+30/30 - 1s - loss: 2.1771 - categorical_accuracy: 0.3321 - val_loss: 1.8325 - val_categorical_accuracy: 0.4107 - val_whole_captcha_accuracy: 0.0336 - 1s/epoch - 35ms/step
+Epoch 9/100
+ - val_whole_captcha_accuracy: 0.0462
+30/30 - 1s - loss: 1.8655 - categorical_accuracy: 0.4224 - val_loss: 1.6074 - val_categorical_accuracy: 0.4443 - val_whole_captcha_accuracy: 0.0462 - 1s/epoch - 39ms/step
+Epoch 10/100
+ - val_whole_captcha_accuracy: 0.1597
+30/30 - 1s - loss: 1.5622 - categorical_accuracy: 0.5174 - val_loss: 1.1856 - val_categorical_accuracy: 0.6397 - val_whole_captcha_accuracy: 0.1597 - 1s/epoch - 38ms/step
+Epoch 11/100
+ - val_whole_captcha_accuracy: 0.2269
+30/30 - 1s - loss: 1.3294 - categorical_accuracy: 0.5824 - val_loss: 0.9826 - val_categorical_accuracy: 0.7090 - val_whole_captcha_accuracy: 0.2269 - 1s/epoch - 37ms/step
+Epoch 12/100
+ - val_whole_captcha_accuracy: 0.3529
+30/30 - 1s - loss: 1.1355 - categorical_accuracy: 0.6405 - val_loss: 0.7754 - val_categorical_accuracy: 0.7710 - val_whole_captcha_accuracy: 0.3529 - 1s/epoch - 38ms/step
+Epoch 13/100
+ - val_whole_captcha_accuracy: 0.4034
+30/30 - 1s - loss: 0.9649 - categorical_accuracy: 0.6953 - val_loss: 0.6673 - val_categorical_accuracy: 0.7941 - val_whole_captcha_accuracy: 0.4034 - 1s/epoch - 36ms/step
+Epoch 14/100
+ - val_whole_captcha_accuracy: 0.4958
+30/30 - 1s - loss: 0.8183 - categorical_accuracy: 0.7347 - val_loss: 0.5268 - val_categorical_accuracy: 0.8414 - val_whole_captcha_accuracy: 0.4958 - 1s/epoch - 38ms/step
+Epoch 15/100
+ - val_whole_captcha_accuracy: 0.5588
+30/30 - 1s - loss: 0.7160 - categorical_accuracy: 0.7745 - val_loss: 0.4495 - val_categorical_accuracy: 0.8666 - val_whole_captcha_accuracy: 0.5588 - 1s/epoch - 36ms/step
+Epoch 16/100
+ - val_whole_captcha_accuracy: 0.5924
+30/30 - 1s - loss: 0.6138 - categorical_accuracy: 0.8039 - val_loss: 0.4028 - val_categorical_accuracy: 0.8750 - val_whole_captcha_accuracy: 0.5924 - 1s/epoch - 36ms/step
+Epoch 17/100
+ - val_whole_captcha_accuracy: 0.6134
+30/30 - 1s - loss: 0.5870 - categorical_accuracy: 0.8168 - val_loss: 0.3667 - val_categorical_accuracy: 0.8876 - val_whole_captcha_accuracy: 0.6134 - 1s/epoch - 46ms/step
+Epoch 18/100
+ - val_whole_captcha_accuracy: 0.6597
+30/30 - 1s - loss: 0.5030 - categorical_accuracy: 0.8371 - val_loss: 0.3308 - val_categorical_accuracy: 0.9002 - val_whole_captcha_accuracy: 0.6597 - 1s/epoch - 45ms/step
+Epoch 19/100
+ - val_whole_captcha_accuracy: 0.7143
+30/30 - 1s - loss: 0.4836 - categorical_accuracy: 0.8476 - val_loss: 0.2632 - val_categorical_accuracy: 0.9202 - val_whole_captcha_accuracy: 0.7143 - 1s/epoch - 44ms/step
+Epoch 20/100
+ - val_whole_captcha_accuracy: 0.7311
+30/30 - 2s - loss: 0.4266 - categorical_accuracy: 0.8624 - val_loss: 0.2456 - val_categorical_accuracy: 0.9244 - val_whole_captcha_accuracy: 0.7311 - 2s/epoch - 54ms/step
+Epoch 21/100
+ - val_whole_captcha_accuracy: 0.6933
+30/30 - 1s - loss: 0.4195 - categorical_accuracy: 0.8645 - val_loss: 0.2777 - val_categorical_accuracy: 0.9097 - val_whole_captcha_accuracy: 0.6933 - 1s/epoch - 42ms/step
+Epoch 22/100
+ - val_whole_captcha_accuracy: 0.7437
+30/30 - 1s - loss: 0.3745 - categorical_accuracy: 0.8813 - val_loss: 0.2016 - val_categorical_accuracy: 0.9296 - val_whole_captcha_accuracy: 0.7437 - 1s/epoch - 47ms/step
+Epoch 23/100
+ - val_whole_captcha_accuracy: 0.7605
+30/30 - 1s - loss: 0.3265 - categorical_accuracy: 0.8953 - val_loss: 0.1834 - val_categorical_accuracy: 0.9359 - val_whole_captcha_accuracy: 0.7605 - 1s/epoch - 44ms/step
+Epoch 24/100
+ - val_whole_captcha_accuracy: 0.7731
+30/30 - 1s - loss: 0.3258 - categorical_accuracy: 0.8992 - val_loss: 0.1797 - val_categorical_accuracy: 0.9401 - val_whole_captcha_accuracy: 0.7731 - 1s/epoch - 40ms/step
+Epoch 25/100
+ - val_whole_captcha_accuracy: 0.7773
+30/30 - 1s - loss: 0.2983 - categorical_accuracy: 0.9079 - val_loss: 0.1918 - val_categorical_accuracy: 0.9401 - val_whole_captcha_accuracy: 0.7773 - 1s/epoch - 37ms/step
+Epoch 26/100
+ - val_whole_captcha_accuracy: 0.8067
+30/30 - 1s - loss: 0.2832 - categorical_accuracy: 0.9126 - val_loss: 0.1546 - val_categorical_accuracy: 0.9496 - val_whole_captcha_accuracy: 0.8067 - 1s/epoch - 39ms/step
+Epoch 27/100
+ - val_whole_captcha_accuracy: 0.8235
+30/30 - 1s - loss: 0.2559 - categorical_accuracy: 0.9184 - val_loss: 0.1467 - val_categorical_accuracy: 0.9548 - val_whole_captcha_accuracy: 0.8235 - 1s/epoch - 36ms/step
+Epoch 28/100
+ - val_whole_captcha_accuracy: 0.8613
+30/30 - 1s - loss: 0.2396 - categorical_accuracy: 0.9279 - val_loss: 0.1303 - val_categorical_accuracy: 0.9632 - val_whole_captcha_accuracy: 0.8613 - 1s/epoch - 40ms/step
+Epoch 29/100
+ - val_whole_captcha_accuracy: 0.8529
+30/30 - 1s - loss: 0.2331 - categorical_accuracy: 0.9292 - val_loss: 0.1280 - val_categorical_accuracy: 0.9611 - val_whole_captcha_accuracy: 0.8529 - 1s/epoch - 40ms/step
+Epoch 30/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 2s - loss: 0.2193 - categorical_accuracy: 0.9316 - val_loss: 0.1192 - val_categorical_accuracy: 0.9643 - val_whole_captcha_accuracy: 0.8655 - 2s/epoch - 54ms/step
+Epoch 31/100
+ - val_whole_captcha_accuracy: 0.8403
+30/30 - 1s - loss: 0.2201 - categorical_accuracy: 0.9300 - val_loss: 0.1265 - val_categorical_accuracy: 0.9590 - val_whole_captcha_accuracy: 0.8403 - 1s/epoch - 48ms/step
+Epoch 32/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 2s - loss: 0.1889 - categorical_accuracy: 0.9421 - val_loss: 0.1100 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8655 - 2s/epoch - 50ms/step
+Epoch 33/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 1s - loss: 0.1843 - categorical_accuracy: 0.9416 - val_loss: 0.1098 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8655 - 1s/epoch - 48ms/step
+Epoch 34/100
+ - val_whole_captcha_accuracy: 0.8782
+30/30 - 2s - loss: 0.1781 - categorical_accuracy: 0.9455 - val_loss: 0.1008 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8782 - 2s/epoch - 51ms/step
+Epoch 35/100
+ - val_whole_captcha_accuracy: 0.8613
+30/30 - 1s - loss: 0.1674 - categorical_accuracy: 0.9463 - val_loss: 0.1099 - val_categorical_accuracy: 0.9622 - val_whole_captcha_accuracy: 0.8613 - 1s/epoch - 47ms/step
+Epoch 36/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 2s - loss: 0.1438 - categorical_accuracy: 0.9550 - val_loss: 0.0924 - val_categorical_accuracy: 0.9737 - val_whole_captcha_accuracy: 0.8950 - 2s/epoch - 53ms/step
+Epoch 37/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.1638 - categorical_accuracy: 0.9463 - val_loss: 0.0948 - val_categorical_accuracy: 0.9716 - val_whole_captcha_accuracy: 0.8908 - 1s/epoch - 46ms/step
+Epoch 38/100
+ - val_whole_captcha_accuracy: 0.9118
+30/30 - 2s - loss: 0.1574 - categorical_accuracy: 0.9497 - val_loss: 0.0892 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9118 - 2s/epoch - 53ms/step
+Epoch 39/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.1382 - categorical_accuracy: 0.9600 - val_loss: 0.0903 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8908 - 1s/epoch - 46ms/step
+Epoch 40/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.1329 - categorical_accuracy: 0.9600 - val_loss: 0.0844 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 48ms/step
+Epoch 41/100
+ - val_whole_captcha_accuracy: 0.9034
+30/30 - 1s - loss: 0.1338 - categorical_accuracy: 0.9576 - val_loss: 0.0859 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9034 - 1s/epoch - 49ms/step
+Epoch 42/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.1442 - categorical_accuracy: 0.9605 - val_loss: 0.0858 - val_categorical_accuracy: 0.9769 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 47ms/step
+Epoch 43/100
+ - val_whole_captcha_accuracy: 0.9160
+30/30 - 1s - loss: 0.1166 - categorical_accuracy: 0.9655 - val_loss: 0.0689 - val_categorical_accuracy: 0.9790 - val_whole_captcha_accuracy: 0.9160 - 1s/epoch - 49ms/step
+Epoch 44/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.1160 - categorical_accuracy: 0.9653 - val_loss: 0.0909 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8908 - 1s/epoch - 47ms/step
+Epoch 45/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 1s - loss: 0.1086 - categorical_accuracy: 0.9650 - val_loss: 0.0774 - val_categorical_accuracy: 0.9716 - val_whole_captcha_accuracy: 0.8950 - 1s/epoch - 46ms/step
+Epoch 46/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.1080 - categorical_accuracy: 0.9658 - val_loss: 0.0758 - val_categorical_accuracy: 0.9790 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 48ms/step
+Epoch 47/100
+ - val_whole_captcha_accuracy: 0.9160
+30/30 - 2s - loss: 0.0967 - categorical_accuracy: 0.9700 - val_loss: 0.0675 - val_categorical_accuracy: 0.9779 - val_whole_captcha_accuracy: 0.9160 - 2s/epoch - 51ms/step
+Epoch 48/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0982 - categorical_accuracy: 0.9724 - val_loss: 0.0707 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 50ms/step
+Epoch 49/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0877 - categorical_accuracy: 0.9711 - val_loss: 0.0678 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 48ms/step
+Epoch 50/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.1044 - categorical_accuracy: 0.9661 - val_loss: 0.0856 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 49ms/step
+Epoch 51/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0951 - categorical_accuracy: 0.9721 - val_loss: 0.0740 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 49ms/step
+Epoch 52/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0910 - categorical_accuracy: 0.9745 - val_loss: 0.0698 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 47ms/step
+Epoch 53/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0772 - categorical_accuracy: 0.9766 - val_loss: 0.0813 - val_categorical_accuracy: 0.9790 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 49ms/step
+Epoch 54/100
+ - val_whole_captcha_accuracy: 0.9328
+30/30 - 2s - loss: 0.0930 - categorical_accuracy: 0.9732 - val_loss: 0.0679 - val_categorical_accuracy: 0.9832 - val_whole_captcha_accuracy: 0.9328 - 2s/epoch - 55ms/step
+Epoch 55/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0791 - categorical_accuracy: 0.9779 - val_loss: 0.0668 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 49ms/step
+Epoch 56/100
+ - val_whole_captcha_accuracy: 0.9328
+30/30 - 1s - loss: 0.0865 - categorical_accuracy: 0.9742 - val_loss: 0.0640 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9328 - 1s/epoch - 49ms/step
+Epoch 57/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 2s - loss: 0.0745 - categorical_accuracy: 0.9761 - val_loss: 0.0728 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9244 - 2s/epoch - 51ms/step
+Epoch 58/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 2s - loss: 0.0655 - categorical_accuracy: 0.9818 - val_loss: 0.0710 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9286 - 2s/epoch - 50ms/step
+Epoch 59/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0728 - categorical_accuracy: 0.9784 - val_loss: 0.0728 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 48ms/step
+Epoch 60/100
+ - val_whole_captcha_accuracy: 0.9118
+30/30 - 2s - loss: 0.0774 - categorical_accuracy: 0.9797 - val_loss: 0.0739 - val_categorical_accuracy: 0.9779 - val_whole_captcha_accuracy: 0.9118 - 2s/epoch - 50ms/step
+Epoch 61/100
+ - val_whole_captcha_accuracy: 0.9454
+30/30 - 2s - loss: 0.0823 - categorical_accuracy: 0.9724 - val_loss: 0.0630 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9454 - 2s/epoch - 53ms/step
+Epoch 62/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0624 - categorical_accuracy: 0.9803 - val_loss: 0.0651 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 50ms/step
+Epoch 63/100
+ - val_whole_captcha_accuracy: 0.9496
+30/30 - 2s - loss: 0.0546 - categorical_accuracy: 0.9837 - val_loss: 0.0574 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9496 - 2s/epoch - 52ms/step
+Epoch 64/100
+ - val_whole_captcha_accuracy: 0.9538
+30/30 - 2s - loss: 0.0552 - categorical_accuracy: 0.9832 - val_loss: 0.0532 - val_categorical_accuracy: 0.9874 - val_whole_captcha_accuracy: 0.9538 - 2s/epoch - 51ms/step
+Epoch 65/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0615 - categorical_accuracy: 0.9818 - val_loss: 0.0630 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 49ms/step
+Epoch 66/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0605 - categorical_accuracy: 0.9832 - val_loss: 0.0563 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9370 - 1s/epoch - 50ms/step
+Epoch 67/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0607 - categorical_accuracy: 0.9824 - val_loss: 0.0659 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 49ms/step
+Epoch 68/100
+ - val_whole_captcha_accuracy: 0.9328
+30/30 - 2s - loss: 0.0572 - categorical_accuracy: 0.9832 - val_loss: 0.0636 - val_categorical_accuracy: 0.9832 - val_whole_captcha_accuracy: 0.9328 - 2s/epoch - 51ms/step
+Epoch 69/100
+ - val_whole_captcha_accuracy: 0.9496
+30/30 - 1s - loss: 0.0638 - categorical_accuracy: 0.9813 - val_loss: 0.0545 - val_categorical_accuracy: 0.9874 - val_whole_captcha_accuracy: 0.9496 - 1s/epoch - 48ms/step
+Epoch 70/100
+ - val_whole_captcha_accuracy: 0.9496
+30/30 - 2s - loss: 0.0663 - categorical_accuracy: 0.9808 - val_loss: 0.0582 - val_categorical_accuracy: 0.9874 - val_whole_captcha_accuracy: 0.9496 - 2s/epoch - 50ms/step
+Epoch 71/100
+ - val_whole_captcha_accuracy: 0.9496
+30/30 - 1s - loss: 0.0526 - categorical_accuracy: 0.9847 - val_loss: 0.0554 - val_categorical_accuracy: 0.9874 - val_whole_captcha_accuracy: 0.9496 - 1s/epoch - 49ms/step
+Epoch 72/100
+ - val_whole_captcha_accuracy: 0.9412
+30/30 - 1s - loss: 0.0542 - categorical_accuracy: 0.9813 - val_loss: 0.0618 - val_categorical_accuracy: 0.9853 - val_whole_captcha_accuracy: 0.9412 - 1s/epoch - 50ms/step
+Epoch 73/100
+ - val_whole_captcha_accuracy: 0.9454
+30/30 - 1s - loss: 0.0476 - categorical_accuracy: 0.9850 - val_loss: 0.0574 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9454 - 1s/epoch - 46ms/step
+Epoch 74/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0551 - categorical_accuracy: 0.9829 - val_loss: 0.0579 - val_categorical_accuracy: 0.9832 - val_whole_captcha_accuracy: 0.9370 - 1s/epoch - 46ms/step
+Epoch 75/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0504 - categorical_accuracy: 0.9868 - val_loss: 0.0534 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 46ms/step
+Epoch 76/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0424 - categorical_accuracy: 0.9876 - val_loss: 0.0557 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9370 - 1s/epoch - 48ms/step
+Epoch 77/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0478 - categorical_accuracy: 0.9845 - val_loss: 0.0656 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9370 - 1s/epoch - 46ms/step
+Epoch 78/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0641 - categorical_accuracy: 0.9808 - val_loss: 0.0587 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9370 - 1s/epoch - 44ms/step
+Epoch 79/100
+ - val_whole_captcha_accuracy: 0.9412
+30/30 - 1s - loss: 0.0494 - categorical_accuracy: 0.9853 - val_loss: 0.0455 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9412 - 1s/epoch - 49ms/step
+Epoch 80/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0469 - categorical_accuracy: 0.9855 - val_loss: 0.0558 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9370 - 1s/epoch - 43ms/step
+Epoch 81/100
+ - val_whole_captcha_accuracy: 0.9328
+30/30 - 1s - loss: 0.0454 - categorical_accuracy: 0.9866 - val_loss: 0.0572 - val_categorical_accuracy: 0.9832 - val_whole_captcha_accuracy: 0.9328 - 1s/epoch - 38ms/step
+Epoch 82/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0397 - categorical_accuracy: 0.9884 - val_loss: 0.0642 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 36ms/step
+Epoch 83/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0382 - categorical_accuracy: 0.9879 - val_loss: 0.0691 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 34ms/step
+Epoch 84/100
+ - val_whole_captcha_accuracy: 0.9454
+30/30 - 1s - loss: 0.0370 - categorical_accuracy: 0.9876 - val_loss: 0.0550 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9454 - 989ms/epoch - 33ms/step
+Epoch 85/100
+ - val_whole_captcha_accuracy: 0.9412
+30/30 - 1s - loss: 0.0412 - categorical_accuracy: 0.9874 - val_loss: 0.0575 - val_categorical_accuracy: 0.9853 - val_whole_captcha_accuracy: 0.9412 - 1s/epoch - 34ms/step
+Epoch 86/100
+ - val_whole_captcha_accuracy: 0.9454
+30/30 - 1s - loss: 0.0425 - categorical_accuracy: 0.9882 - val_loss: 0.0610 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9454 - 960ms/epoch - 32ms/step
+Epoch 87/100
+ - val_whole_captcha_accuracy: 0.9454
+30/30 - 1s - loss: 0.0389 - categorical_accuracy: 0.9887 - val_loss: 0.0521 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9454 - 976ms/epoch - 33ms/step
+Epoch 88/100
+ - val_whole_captcha_accuracy: 0.9580
+30/30 - 1s - loss: 0.0352 - categorical_accuracy: 0.9900 - val_loss: 0.0586 - val_categorical_accuracy: 0.9895 - val_whole_captcha_accuracy: 0.9580 - 1s/epoch - 35ms/step
+Epoch 89/100
+ - val_whole_captcha_accuracy: 0.9454
+30/30 - 1s - loss: 0.0454 - categorical_accuracy: 0.9861 - val_loss: 0.0567 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9454 - 978ms/epoch - 33ms/step
+Epoch 90/100
+ - val_whole_captcha_accuracy: 0.9580
+30/30 - 1s - loss: 0.0436 - categorical_accuracy: 0.9874 - val_loss: 0.0537 - val_categorical_accuracy: 0.9895 - val_whole_captcha_accuracy: 0.9580 - 1s/epoch - 36ms/step
+Epoch 91/100
+ - val_whole_captcha_accuracy: 0.9496
+30/30 - 1s - loss: 0.0335 - categorical_accuracy: 0.9900 - val_loss: 0.0555 - val_categorical_accuracy: 0.9874 - val_whole_captcha_accuracy: 0.9496 - 1s/epoch - 34ms/step
+Epoch 92/100
+ - val_whole_captcha_accuracy: 0.9454
+30/30 - 1s - loss: 0.0371 - categorical_accuracy: 0.9884 - val_loss: 0.0662 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9454 - 1s/epoch - 34ms/step
+Epoch 93/100
+ - val_whole_captcha_accuracy: 0.9496
+30/30 - 1s - loss: 0.0333 - categorical_accuracy: 0.9903 - val_loss: 0.0543 - val_categorical_accuracy: 0.9874 - val_whole_captcha_accuracy: 0.9496 - 993ms/epoch - 33ms/step
+Epoch 94/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0363 - categorical_accuracy: 0.9892 - val_loss: 0.0605 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9370 - 997ms/epoch - 33ms/step
+Epoch 95/100
+ - val_whole_captcha_accuracy: 0.9496
+30/30 - 1s - loss: 0.0388 - categorical_accuracy: 0.9871 - val_loss: 0.0585 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9496 - 1s/epoch - 34ms/step
+Epoch 96/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0352 - categorical_accuracy: 0.9889 - val_loss: 0.0702 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 34ms/step
+Epoch 97/100
+ - val_whole_captcha_accuracy: 0.9622
+30/30 - 1s - loss: 0.0362 - categorical_accuracy: 0.9874 - val_loss: 0.0564 - val_categorical_accuracy: 0.9905 - val_whole_captcha_accuracy: 0.9622 - 1s/epoch - 40ms/step
+Epoch 98/100
+ - val_whole_captcha_accuracy: 0.9496
+30/30 - 1s - loss: 0.0276 - categorical_accuracy: 0.9921 - val_loss: 0.0539 - val_categorical_accuracy: 0.9874 - val_whole_captcha_accuracy: 0.9496 - 1s/epoch - 41ms/step
+Epoch 99/100
+ - val_whole_captcha_accuracy: 0.9538
+30/30 - 1s - loss: 0.0356 - categorical_accuracy: 0.9879 - val_loss: 0.0485 - val_categorical_accuracy: 0.9884 - val_whole_captcha_accuracy: 0.9538 - 1s/epoch - 38ms/step
+Epoch 100/100
+ - val_whole_captcha_accuracy: 0.9496
+30/30 - 1s - loss: 0.0370 - categorical_accuracy: 0.9900 - val_loss: 0.0528 - val_categorical_accuracy: 0.9874 - val_whole_captcha_accuracy: 0.9496 - 1s/epoch - 40ms/step
+Epoch 1/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 3s - loss: 3.4689 - categorical_accuracy: 0.0363 - val_loss: 3.4659 - val_categorical_accuracy: 0.0399 - val_whole_captcha_accuracy: 0.0000e+00 - 3s/epoch - 90ms/step
+Epoch 2/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4642 - categorical_accuracy: 0.0361 - val_loss: 3.4672 - val_categorical_accuracy: 0.0399 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 44ms/step
+Epoch 3/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4635 - categorical_accuracy: 0.0329 - val_loss: 3.4657 - val_categorical_accuracy: 0.0294 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 38ms/step
+Epoch 4/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4617 - categorical_accuracy: 0.0368 - val_loss: 3.4625 - val_categorical_accuracy: 0.0462 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 39ms/step
+Epoch 5/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4476 - categorical_accuracy: 0.0521 - val_loss: 3.4157 - val_categorical_accuracy: 0.0599 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 42ms/step
+Epoch 6/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.2770 - categorical_accuracy: 0.0976 - val_loss: 2.9755 - val_categorical_accuracy: 0.1649 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 40ms/step
+Epoch 7/100
+ - val_whole_captcha_accuracy: 0.0042
+30/30 - 1s - loss: 2.8071 - categorical_accuracy: 0.1900 - val_loss: 2.4656 - val_categorical_accuracy: 0.2595 - val_whole_captcha_accuracy: 0.0042 - 1s/epoch - 44ms/step
+Epoch 8/100
+ - val_whole_captcha_accuracy: 0.0420
+30/30 - 1s - loss: 2.2985 - categorical_accuracy: 0.3197 - val_loss: 1.8963 - val_categorical_accuracy: 0.4055 - val_whole_captcha_accuracy: 0.0420 - 1s/epoch - 43ms/step
+Epoch 9/100
+ - val_whole_captcha_accuracy: 0.0714
+30/30 - 1s - loss: 1.8548 - categorical_accuracy: 0.4461 - val_loss: 1.5096 - val_categorical_accuracy: 0.5294 - val_whole_captcha_accuracy: 0.0714 - 1s/epoch - 49ms/step
+Epoch 10/100
+ - val_whole_captcha_accuracy: 0.2311
+30/30 - 2s - loss: 1.4446 - categorical_accuracy: 0.5592 - val_loss: 1.1136 - val_categorical_accuracy: 0.6849 - val_whole_captcha_accuracy: 0.2311 - 2s/epoch - 54ms/step
+Epoch 11/100
+ - val_whole_captcha_accuracy: 0.3908
+30/30 - 1s - loss: 1.1466 - categorical_accuracy: 0.6447 - val_loss: 0.7805 - val_categorical_accuracy: 0.7752 - val_whole_captcha_accuracy: 0.3908 - 1s/epoch - 45ms/step
+Epoch 12/100
+ - val_whole_captcha_accuracy: 0.4202
+30/30 - 1s - loss: 0.9083 - categorical_accuracy: 0.7121 - val_loss: 0.6654 - val_categorical_accuracy: 0.7952 - val_whole_captcha_accuracy: 0.4202 - 1s/epoch - 46ms/step
+Epoch 13/100
+ - val_whole_captcha_accuracy: 0.5126
+30/30 - 1s - loss: 0.7711 - categorical_accuracy: 0.7589 - val_loss: 0.5436 - val_categorical_accuracy: 0.8361 - val_whole_captcha_accuracy: 0.5126 - 1s/epoch - 50ms/step
+Epoch 14/100
+ - val_whole_captcha_accuracy: 0.5420
+30/30 - 1s - loss: 0.6755 - categorical_accuracy: 0.7829 - val_loss: 0.4753 - val_categorical_accuracy: 0.8487 - val_whole_captcha_accuracy: 0.5420 - 1s/epoch - 43ms/step
+Epoch 15/100
+ - val_whole_captcha_accuracy: 0.5882
+30/30 - 1s - loss: 0.5954 - categorical_accuracy: 0.8097 - val_loss: 0.4373 - val_categorical_accuracy: 0.8771 - val_whole_captcha_accuracy: 0.5882 - 1s/epoch - 41ms/step
+Epoch 16/100
+ - val_whole_captcha_accuracy: 0.6681
+30/30 - 1s - loss: 0.4840 - categorical_accuracy: 0.8524 - val_loss: 0.3399 - val_categorical_accuracy: 0.8939 - val_whole_captcha_accuracy: 0.6681 - 1s/epoch - 43ms/step
+Epoch 17/100
+ - val_whole_captcha_accuracy: 0.6681
+30/30 - 1s - loss: 0.4368 - categorical_accuracy: 0.8547 - val_loss: 0.3268 - val_categorical_accuracy: 0.9002 - val_whole_captcha_accuracy: 0.6681 - 1s/epoch - 37ms/step
+Epoch 18/100
+ - val_whole_captcha_accuracy: 0.7017
+30/30 - 1s - loss: 0.3913 - categorical_accuracy: 0.8842 - val_loss: 0.2917 - val_categorical_accuracy: 0.9139 - val_whole_captcha_accuracy: 0.7017 - 1s/epoch - 47ms/step
+Epoch 19/100
+ - val_whole_captcha_accuracy: 0.7479
+30/30 - 1s - loss: 0.3717 - categorical_accuracy: 0.8795 - val_loss: 0.2611 - val_categorical_accuracy: 0.9275 - val_whole_captcha_accuracy: 0.7479 - 1s/epoch - 46ms/step
+Epoch 20/100
+ - val_whole_captcha_accuracy: 0.7563
+30/30 - 1s - loss: 0.3138 - categorical_accuracy: 0.9050 - val_loss: 0.2358 - val_categorical_accuracy: 0.9317 - val_whole_captcha_accuracy: 0.7563 - 1s/epoch - 44ms/step
+Epoch 21/100
+ - val_whole_captcha_accuracy: 0.7437
+30/30 - 1s - loss: 0.3210 - categorical_accuracy: 0.8961 - val_loss: 0.2357 - val_categorical_accuracy: 0.9317 - val_whole_captcha_accuracy: 0.7437 - 1s/epoch - 39ms/step
+Epoch 22/100
+ - val_whole_captcha_accuracy: 0.8193
+30/30 - 1s - loss: 0.2760 - categorical_accuracy: 0.9145 - val_loss: 0.2094 - val_categorical_accuracy: 0.9496 - val_whole_captcha_accuracy: 0.8193 - 1s/epoch - 41ms/step
+Epoch 23/100
+ - val_whole_captcha_accuracy: 0.8067
+30/30 - 1s - loss: 0.2539 - categorical_accuracy: 0.9132 - val_loss: 0.1997 - val_categorical_accuracy: 0.9475 - val_whole_captcha_accuracy: 0.8067 - 1s/epoch - 39ms/step
+Epoch 24/100
+ - val_whole_captcha_accuracy: 0.7899
+30/30 - 1s - loss: 0.2391 - categorical_accuracy: 0.9295 - val_loss: 0.1923 - val_categorical_accuracy: 0.9422 - val_whole_captcha_accuracy: 0.7899 - 1s/epoch - 40ms/step
+Epoch 25/100
+ - val_whole_captcha_accuracy: 0.8025
+30/30 - 1s - loss: 0.2208 - categorical_accuracy: 0.9347 - val_loss: 0.1868 - val_categorical_accuracy: 0.9454 - val_whole_captcha_accuracy: 0.8025 - 1s/epoch - 39ms/step
+Epoch 26/100
+ - val_whole_captcha_accuracy: 0.8445
+30/30 - 1s - loss: 0.2023 - categorical_accuracy: 0.9337 - val_loss: 0.1708 - val_categorical_accuracy: 0.9580 - val_whole_captcha_accuracy: 0.8445 - 1s/epoch - 42ms/step
+Epoch 27/100
+ - val_whole_captcha_accuracy: 0.8403
+30/30 - 1s - loss: 0.1972 - categorical_accuracy: 0.9418 - val_loss: 0.1627 - val_categorical_accuracy: 0.9580 - val_whole_captcha_accuracy: 0.8403 - 1s/epoch - 38ms/step
+Epoch 28/100
+ - val_whole_captcha_accuracy: 0.8277
+30/30 - 1s - loss: 0.1752 - categorical_accuracy: 0.9495 - val_loss: 0.1639 - val_categorical_accuracy: 0.9527 - val_whole_captcha_accuracy: 0.8277 - 1s/epoch - 40ms/step
+Epoch 29/100
+ - val_whole_captcha_accuracy: 0.8403
+30/30 - 1s - loss: 0.1777 - categorical_accuracy: 0.9453 - val_loss: 0.1747 - val_categorical_accuracy: 0.9569 - val_whole_captcha_accuracy: 0.8403 - 1s/epoch - 39ms/step
+Epoch 30/100
+ - val_whole_captcha_accuracy: 0.8487
+30/30 - 1s - loss: 0.1711 - categorical_accuracy: 0.9471 - val_loss: 0.1505 - val_categorical_accuracy: 0.9590 - val_whole_captcha_accuracy: 0.8487 - 1s/epoch - 42ms/step
+Epoch 31/100
+ - val_whole_captcha_accuracy: 0.8529
+30/30 - 1s - loss: 0.1667 - categorical_accuracy: 0.9487 - val_loss: 0.1601 - val_categorical_accuracy: 0.9611 - val_whole_captcha_accuracy: 0.8529 - 1s/epoch - 42ms/step
+Epoch 32/100
+ - val_whole_captcha_accuracy: 0.8361
+30/30 - 1s - loss: 0.1395 - categorical_accuracy: 0.9582 - val_loss: 0.1463 - val_categorical_accuracy: 0.9590 - val_whole_captcha_accuracy: 0.8361 - 1s/epoch - 38ms/step
+Epoch 33/100
+ - val_whole_captcha_accuracy: 0.8697
+30/30 - 1s - loss: 0.1306 - categorical_accuracy: 0.9626 - val_loss: 0.1351 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8697 - 1s/epoch - 43ms/step
+Epoch 34/100
+ - val_whole_captcha_accuracy: 0.8529
+30/30 - 1s - loss: 0.1440 - categorical_accuracy: 0.9584 - val_loss: 0.1432 - val_categorical_accuracy: 0.9632 - val_whole_captcha_accuracy: 0.8529 - 1s/epoch - 40ms/step
+Epoch 35/100
+ - val_whole_captcha_accuracy: 0.8697
+30/30 - 1s - loss: 0.1314 - categorical_accuracy: 0.9576 - val_loss: 0.1422 - val_categorical_accuracy: 0.9664 - val_whole_captcha_accuracy: 0.8697 - 1s/epoch - 45ms/step
+Epoch 36/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.1404 - categorical_accuracy: 0.9579 - val_loss: 0.1390 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8824 - 1s/epoch - 50ms/step
+Epoch 37/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 1s - loss: 0.1199 - categorical_accuracy: 0.9632 - val_loss: 0.1374 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8655 - 1s/epoch - 39ms/step
+Epoch 38/100
+ - val_whole_captcha_accuracy: 0.8782
+30/30 - 1s - loss: 0.1133 - categorical_accuracy: 0.9629 - val_loss: 0.1189 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8782 - 1s/epoch - 41ms/step
+Epoch 39/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 1s - loss: 0.0948 - categorical_accuracy: 0.9724 - val_loss: 0.1257 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8950 - 1s/epoch - 40ms/step
+Epoch 40/100
+ - val_whole_captcha_accuracy: 0.8655
+30/30 - 1s - loss: 0.0915 - categorical_accuracy: 0.9713 - val_loss: 0.1324 - val_categorical_accuracy: 0.9664 - val_whole_captcha_accuracy: 0.8655 - 1s/epoch - 41ms/step
+Epoch 41/100
+ - val_whole_captcha_accuracy: 0.8697
+30/30 - 1s - loss: 0.0998 - categorical_accuracy: 0.9674 - val_loss: 0.1344 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8697 - 1s/epoch - 38ms/step
+Epoch 42/100
+ - val_whole_captcha_accuracy: 0.8697
+30/30 - 1s - loss: 0.0956 - categorical_accuracy: 0.9695 - val_loss: 0.1291 - val_categorical_accuracy: 0.9632 - val_whole_captcha_accuracy: 0.8697 - 1s/epoch - 38ms/step
+Epoch 43/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0936 - categorical_accuracy: 0.9726 - val_loss: 0.1209 - val_categorical_accuracy: 0.9716 - val_whole_captcha_accuracy: 0.8908 - 1s/epoch - 39ms/step
+Epoch 44/100
+ - val_whole_captcha_accuracy: 0.9034
+30/30 - 1s - loss: 0.0908 - categorical_accuracy: 0.9724 - val_loss: 0.1155 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9034 - 1s/epoch - 41ms/step
+Epoch 45/100
+ - val_whole_captcha_accuracy: 0.8866
+30/30 - 1s - loss: 0.0844 - categorical_accuracy: 0.9716 - val_loss: 0.1149 - val_categorical_accuracy: 0.9716 - val_whole_captcha_accuracy: 0.8866 - 1s/epoch - 39ms/step
+Epoch 46/100
+ - val_whole_captcha_accuracy: 0.8697
+30/30 - 1s - loss: 0.0927 - categorical_accuracy: 0.9713 - val_loss: 0.1310 - val_categorical_accuracy: 0.9653 - val_whole_captcha_accuracy: 0.8697 - 1s/epoch - 38ms/step
+Epoch 47/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.0936 - categorical_accuracy: 0.9687 - val_loss: 0.1179 - val_categorical_accuracy: 0.9706 - val_whole_captcha_accuracy: 0.8824 - 1s/epoch - 40ms/step
+Epoch 48/100
+ - val_whole_captcha_accuracy: 0.9160
+30/30 - 1s - loss: 0.0817 - categorical_accuracy: 0.9792 - val_loss: 0.1129 - val_categorical_accuracy: 0.9790 - val_whole_captcha_accuracy: 0.9160 - 1s/epoch - 43ms/step
+Epoch 49/100
+ - val_whole_captcha_accuracy: 0.8992
+30/30 - 1s - loss: 0.0711 - categorical_accuracy: 0.9811 - val_loss: 0.1001 - val_categorical_accuracy: 0.9748 - val_whole_captcha_accuracy: 0.8992 - 1s/epoch - 38ms/step
+Epoch 50/100
+ - val_whole_captcha_accuracy: 0.8824
+30/30 - 1s - loss: 0.0699 - categorical_accuracy: 0.9771 - val_loss: 0.1143 - val_categorical_accuracy: 0.9695 - val_whole_captcha_accuracy: 0.8824 - 1s/epoch - 39ms/step
+Epoch 51/100
+ - val_whole_captcha_accuracy: 0.9118
+30/30 - 1s - loss: 0.0763 - categorical_accuracy: 0.9795 - val_loss: 0.1072 - val_categorical_accuracy: 0.9779 - val_whole_captcha_accuracy: 0.9118 - 1s/epoch - 39ms/step
+Epoch 52/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.0643 - categorical_accuracy: 0.9797 - val_loss: 0.1093 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 39ms/step
+Epoch 53/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.0586 - categorical_accuracy: 0.9824 - val_loss: 0.1103 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 40ms/step
+Epoch 54/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0659 - categorical_accuracy: 0.9776 - val_loss: 0.1015 - val_categorical_accuracy: 0.9790 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 42ms/step
+Epoch 55/100
+ - val_whole_captcha_accuracy: 0.9034
+30/30 - 1s - loss: 0.0691 - categorical_accuracy: 0.9774 - val_loss: 0.1077 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9034 - 1s/epoch - 42ms/step
+Epoch 56/100
+ - val_whole_captcha_accuracy: 0.9034
+30/30 - 1s - loss: 0.0539 - categorical_accuracy: 0.9832 - val_loss: 0.1145 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9034 - 1s/epoch - 41ms/step
+Epoch 57/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 1s - loss: 0.0568 - categorical_accuracy: 0.9818 - val_loss: 0.1147 - val_categorical_accuracy: 0.9737 - val_whole_captcha_accuracy: 0.8950 - 1s/epoch - 41ms/step
+Epoch 58/100
+ - val_whole_captcha_accuracy: 0.8908
+30/30 - 1s - loss: 0.0556 - categorical_accuracy: 0.9842 - val_loss: 0.1191 - val_categorical_accuracy: 0.9727 - val_whole_captcha_accuracy: 0.8908 - 1s/epoch - 40ms/step
+Epoch 59/100
+ - val_whole_captcha_accuracy: 0.9160
+30/30 - 1s - loss: 0.0605 - categorical_accuracy: 0.9789 - val_loss: 0.1063 - val_categorical_accuracy: 0.9790 - val_whole_captcha_accuracy: 0.9160 - 1s/epoch - 39ms/step
+Epoch 60/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 1s - loss: 0.0600 - categorical_accuracy: 0.9808 - val_loss: 0.1063 - val_categorical_accuracy: 0.9737 - val_whole_captcha_accuracy: 0.8950 - 1s/epoch - 47ms/step
+Epoch 61/100
+ - val_whole_captcha_accuracy: 0.8866
+30/30 - 1s - loss: 0.0559 - categorical_accuracy: 0.9842 - val_loss: 0.1192 - val_categorical_accuracy: 0.9716 - val_whole_captcha_accuracy: 0.8866 - 1s/epoch - 44ms/step
+Epoch 62/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.0632 - categorical_accuracy: 0.9800 - val_loss: 0.1003 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 41ms/step
+Epoch 63/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0462 - categorical_accuracy: 0.9858 - val_loss: 0.1021 - val_categorical_accuracy: 0.9779 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 40ms/step
+Epoch 64/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0518 - categorical_accuracy: 0.9853 - val_loss: 0.1045 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 43ms/step
+Epoch 65/100
+ - val_whole_captcha_accuracy: 0.8950
+30/30 - 1s - loss: 0.0506 - categorical_accuracy: 0.9834 - val_loss: 0.1159 - val_categorical_accuracy: 0.9737 - val_whole_captcha_accuracy: 0.8950 - 1s/epoch - 41ms/step
+Epoch 66/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0501 - categorical_accuracy: 0.9845 - val_loss: 0.1128 - val_categorical_accuracy: 0.9790 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 41ms/step
+Epoch 67/100
+ - val_whole_captcha_accuracy: 0.9034
+30/30 - 1s - loss: 0.0430 - categorical_accuracy: 0.9876 - val_loss: 0.1171 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9034 - 1s/epoch - 44ms/step
+Epoch 68/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0453 - categorical_accuracy: 0.9858 - val_loss: 0.1061 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 42ms/step
+Epoch 69/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0521 - categorical_accuracy: 0.9834 - val_loss: 0.1141 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 38ms/step
+Epoch 70/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0494 - categorical_accuracy: 0.9863 - val_loss: 0.1030 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 41ms/step
+Epoch 71/100
+ - val_whole_captcha_accuracy: 0.9412
+30/30 - 1s - loss: 0.0456 - categorical_accuracy: 0.9868 - val_loss: 0.0962 - val_categorical_accuracy: 0.9832 - val_whole_captcha_accuracy: 0.9412 - 1s/epoch - 42ms/step
+Epoch 72/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.0447 - categorical_accuracy: 0.9874 - val_loss: 0.1100 - val_categorical_accuracy: 0.9769 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 40ms/step
+Epoch 73/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0466 - categorical_accuracy: 0.9837 - val_loss: 0.1186 - val_categorical_accuracy: 0.9790 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 41ms/step
+Epoch 74/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0484 - categorical_accuracy: 0.9839 - val_loss: 0.1157 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 39ms/step
+Epoch 75/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0392 - categorical_accuracy: 0.9895 - val_loss: 0.1033 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 39ms/step
+Epoch 76/100
+ - val_whole_captcha_accuracy: 0.9118
+30/30 - 1s - loss: 0.0434 - categorical_accuracy: 0.9876 - val_loss: 0.1102 - val_categorical_accuracy: 0.9779 - val_whole_captcha_accuracy: 0.9118 - 1s/epoch - 39ms/step
+Epoch 77/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0352 - categorical_accuracy: 0.9889 - val_loss: 0.1013 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 40ms/step
+Epoch 78/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0401 - categorical_accuracy: 0.9866 - val_loss: 0.1180 - val_categorical_accuracy: 0.9790 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 39ms/step
+Epoch 79/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0385 - categorical_accuracy: 0.9868 - val_loss: 0.1116 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 39ms/step
+Epoch 80/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.0380 - categorical_accuracy: 0.9863 - val_loss: 0.1167 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 39ms/step
+Epoch 81/100
+ - val_whole_captcha_accuracy: 0.9118
+30/30 - 1s - loss: 0.0377 - categorical_accuracy: 0.9871 - val_loss: 0.1230 - val_categorical_accuracy: 0.9779 - val_whole_captcha_accuracy: 0.9118 - 1s/epoch - 37ms/step
+Epoch 82/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0471 - categorical_accuracy: 0.9861 - val_loss: 0.1095 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 39ms/step
+Epoch 83/100
+ - val_whole_captcha_accuracy: 0.9118
+30/30 - 1s - loss: 0.0406 - categorical_accuracy: 0.9871 - val_loss: 0.1183 - val_categorical_accuracy: 0.9779 - val_whole_captcha_accuracy: 0.9118 - 1s/epoch - 39ms/step
+Epoch 84/100
+ - val_whole_captcha_accuracy: 0.9244
+30/30 - 1s - loss: 0.0290 - categorical_accuracy: 0.9897 - val_loss: 0.1100 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9244 - 1s/epoch - 39ms/step
+Epoch 85/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.0363 - categorical_accuracy: 0.9892 - val_loss: 0.1279 - val_categorical_accuracy: 0.9769 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 39ms/step
+Epoch 86/100
+ - val_whole_captcha_accuracy: 0.9202
+30/30 - 1s - loss: 0.0351 - categorical_accuracy: 0.9887 - val_loss: 0.1188 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9202 - 1s/epoch - 37ms/step
+Epoch 87/100
+ - val_whole_captcha_accuracy: 0.9412
+30/30 - 1s - loss: 0.0320 - categorical_accuracy: 0.9892 - val_loss: 0.1154 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9412 - 1s/epoch - 42ms/step
+Epoch 88/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.0300 - categorical_accuracy: 0.9900 - val_loss: 0.1161 - val_categorical_accuracy: 0.9769 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 42ms/step
+Epoch 89/100
+ - val_whole_captcha_accuracy: 0.9076
+30/30 - 1s - loss: 0.0296 - categorical_accuracy: 0.9897 - val_loss: 0.1181 - val_categorical_accuracy: 0.9769 - val_whole_captcha_accuracy: 0.9076 - 1s/epoch - 40ms/step
+Epoch 90/100
+ - val_whole_captcha_accuracy: 0.9160
+30/30 - 2s - loss: 0.0274 - categorical_accuracy: 0.9913 - val_loss: 0.1076 - val_categorical_accuracy: 0.9779 - val_whole_captcha_accuracy: 0.9160 - 2s/epoch - 54ms/step
+Epoch 91/100
+ - val_whole_captcha_accuracy: 0.9328
+30/30 - 1s - loss: 0.0296 - categorical_accuracy: 0.9916 - val_loss: 0.1026 - val_categorical_accuracy: 0.9832 - val_whole_captcha_accuracy: 0.9328 - 1s/epoch - 39ms/step
+Epoch 92/100
+ - val_whole_captcha_accuracy: 0.9286
+30/30 - 1s - loss: 0.0319 - categorical_accuracy: 0.9882 - val_loss: 0.1209 - val_categorical_accuracy: 0.9811 - val_whole_captcha_accuracy: 0.9286 - 1s/epoch - 40ms/step
+Epoch 93/100
+ - val_whole_captcha_accuracy: 0.9034
+30/30 - 1s - loss: 0.0241 - categorical_accuracy: 0.9929 - val_loss: 0.1283 - val_categorical_accuracy: 0.9758 - val_whole_captcha_accuracy: 0.9034 - 1s/epoch - 42ms/step
+Epoch 94/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0391 - categorical_accuracy: 0.9879 - val_loss: 0.1069 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9370 - 1s/epoch - 39ms/step
+Epoch 95/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0325 - categorical_accuracy: 0.9897 - val_loss: 0.1032 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9370 - 1s/epoch - 45ms/step
+Epoch 96/100
+ - val_whole_captcha_accuracy: 0.9370
+30/30 - 1s - loss: 0.0267 - categorical_accuracy: 0.9929 - val_loss: 0.0969 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9370 - 1s/epoch - 50ms/step
+Epoch 1/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 3s - loss: 3.4687 - categorical_accuracy: 0.0350 - val_loss: 3.4651 - val_categorical_accuracy: 0.0243 - val_whole_captcha_accuracy: 0.0000e+00 - 3s/epoch - 107ms/step
+Epoch 2/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4652 - categorical_accuracy: 0.0308 - val_loss: 3.4657 - val_categorical_accuracy: 0.0369 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 48ms/step
+Epoch 3/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4641 - categorical_accuracy: 0.0350 - val_loss: 3.4647 - val_categorical_accuracy: 0.0243 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 44ms/step
+Epoch 4/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4614 - categorical_accuracy: 0.0394 - val_loss: 3.4621 - val_categorical_accuracy: 0.0285 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 46ms/step
+Epoch 5/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.4575 - categorical_accuracy: 0.0347 - val_loss: 3.4555 - val_categorical_accuracy: 0.0591 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 42ms/step
+Epoch 6/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 2s - loss: 3.4318 - categorical_accuracy: 0.0591 - val_loss: 3.3879 - val_categorical_accuracy: 0.0580 - val_whole_captcha_accuracy: 0.0000e+00 - 2s/epoch - 57ms/step
+Epoch 7/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 1s - loss: 3.3079 - categorical_accuracy: 0.0754 - val_loss: 3.2135 - val_categorical_accuracy: 0.0939 - val_whole_captcha_accuracy: 0.0000e+00 - 1s/epoch - 45ms/step
+Epoch 8/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 2s - loss: 3.0005 - categorical_accuracy: 0.1414 - val_loss: 2.9055 - val_categorical_accuracy: 0.1466 - val_whole_captcha_accuracy: 0.0000e+00 - 2s/epoch - 58ms/step
+Epoch 9/100
+ - val_whole_captcha_accuracy: 0.0042
+30/30 - 2s - loss: 2.6973 - categorical_accuracy: 0.2166 - val_loss: 2.3531 - val_categorical_accuracy: 0.3281 - val_whole_captcha_accuracy: 0.0042 - 2s/epoch - 61ms/step
+Epoch 10/100
+ - val_whole_captcha_accuracy: 0.0253
+30/30 - 2s - loss: 2.3629 - categorical_accuracy: 0.3049 - val_loss: 2.0677 - val_categorical_accuracy: 0.3935 - val_whole_captcha_accuracy: 0.0253 - 2s/epoch - 53ms/step
+Epoch 11/100
+ - val_whole_captcha_accuracy: 0.0633
+30/30 - 2s - loss: 2.0538 - categorical_accuracy: 0.3788 - val_loss: 1.6293 - val_categorical_accuracy: 0.5253 - val_whole_captcha_accuracy: 0.0633 - 2s/epoch - 54ms/step
+Epoch 12/100
+ - val_whole_captcha_accuracy: 0.1899
+30/30 - 2s - loss: 1.7500 - categorical_accuracy: 0.4577 - val_loss: 1.3304 - val_categorical_accuracy: 0.6382 - val_whole_captcha_accuracy: 0.1899 - 2s/epoch - 57ms/step
+Epoch 13/100
+ - val_whole_captcha_accuracy: 0.1646
+30/30 - 2s - loss: 1.4955 - categorical_accuracy: 0.5389 - val_loss: 1.1822 - val_categorical_accuracy: 0.6435 - val_whole_captcha_accuracy: 0.1646 - 2s/epoch - 52ms/step
+Epoch 14/100
+ - val_whole_captcha_accuracy: 0.3586
+30/30 - 2s - loss: 1.3105 - categorical_accuracy: 0.5957 - val_loss: 0.8421 - val_categorical_accuracy: 0.7700 - val_whole_captcha_accuracy: 0.3586 - 2s/epoch - 57ms/step
+Epoch 15/100
+ - val_whole_captcha_accuracy: 0.4008
+30/30 - 2s - loss: 1.0739 - categorical_accuracy: 0.6688 - val_loss: 0.7799 - val_categorical_accuracy: 0.7816 - val_whole_captcha_accuracy: 0.4008 - 2s/epoch - 59ms/step
+Epoch 16/100
+ - val_whole_captcha_accuracy: 0.5105
+30/30 - 2s - loss: 0.9503 - categorical_accuracy: 0.6909 - val_loss: 0.5668 - val_categorical_accuracy: 0.8354 - val_whole_captcha_accuracy: 0.5105 - 2s/epoch - 83ms/step
+Epoch 17/100
+ - val_whole_captcha_accuracy: 0.5485
+30/30 - 2s - loss: 0.8188 - categorical_accuracy: 0.7405 - val_loss: 0.5084 - val_categorical_accuracy: 0.8565 - val_whole_captcha_accuracy: 0.5485 - 2s/epoch - 71ms/step
+Epoch 18/100
+ - val_whole_captcha_accuracy: 0.6287
+30/30 - 2s - loss: 0.7284 - categorical_accuracy: 0.7679 - val_loss: 0.4316 - val_categorical_accuracy: 0.8861 - val_whole_captcha_accuracy: 0.6287 - 2s/epoch - 62ms/step
+Epoch 19/100
+ - val_whole_captcha_accuracy: 0.6456
+30/30 - 2s - loss: 0.6303 - categorical_accuracy: 0.8065 - val_loss: 0.3828 - val_categorical_accuracy: 0.8903 - val_whole_captcha_accuracy: 0.6456 - 2s/epoch - 52ms/step
+Epoch 20/100
+ - val_whole_captcha_accuracy: 0.6920
+30/30 - 2s - loss: 0.6076 - categorical_accuracy: 0.8070 - val_loss: 0.3370 - val_categorical_accuracy: 0.9093 - val_whole_captcha_accuracy: 0.6920 - 2s/epoch - 53ms/step
+Epoch 21/100
+ - val_whole_captcha_accuracy: 0.6920
+30/30 - 2s - loss: 0.5320 - categorical_accuracy: 0.8297 - val_loss: 0.3208 - val_categorical_accuracy: 0.9072 - val_whole_captcha_accuracy: 0.6920 - 2s/epoch - 50ms/step
+Epoch 22/100
+ - val_whole_captcha_accuracy: 0.7089
+30/30 - 2s - loss: 0.4987 - categorical_accuracy: 0.8399 - val_loss: 0.2921 - val_categorical_accuracy: 0.9103 - val_whole_captcha_accuracy: 0.7089 - 2s/epoch - 56ms/step
+Epoch 23/100
+ - val_whole_captcha_accuracy: 0.7257
+30/30 - 2s - loss: 0.4546 - categorical_accuracy: 0.8520 - val_loss: 0.2755 - val_categorical_accuracy: 0.9198 - val_whole_captcha_accuracy: 0.7257 - 2s/epoch - 60ms/step
+Epoch 24/100
+ - val_whole_captcha_accuracy: 0.7511
+30/30 - 2s - loss: 0.4502 - categorical_accuracy: 0.8604 - val_loss: 0.2514 - val_categorical_accuracy: 0.9272 - val_whole_captcha_accuracy: 0.7511 - 2s/epoch - 60ms/step
+Epoch 25/100
+ - val_whole_captcha_accuracy: 0.7679
+30/30 - 2s - loss: 0.4051 - categorical_accuracy: 0.8799 - val_loss: 0.2357 - val_categorical_accuracy: 0.9335 - val_whole_captcha_accuracy: 0.7679 - 2s/epoch - 62ms/step
+Epoch 26/100
+ - val_whole_captcha_accuracy: 0.7722
+30/30 - 2s - loss: 0.3836 - categorical_accuracy: 0.8799 - val_loss: 0.2206 - val_categorical_accuracy: 0.9367 - val_whole_captcha_accuracy: 0.7722 - 2s/epoch - 57ms/step
+Epoch 27/100
+ - val_whole_captcha_accuracy: 0.7764
+30/30 - 2s - loss: 0.3527 - categorical_accuracy: 0.8877 - val_loss: 0.2274 - val_categorical_accuracy: 0.9378 - val_whole_captcha_accuracy: 0.7764 - 2s/epoch - 56ms/step
+Epoch 28/100
+ - val_whole_captcha_accuracy: 0.7637
+30/30 - 2s - loss: 0.3604 - categorical_accuracy: 0.8875 - val_loss: 0.2036 - val_categorical_accuracy: 0.9357 - val_whole_captcha_accuracy: 0.7637 - 2s/epoch - 59ms/step
+Epoch 29/100
+ - val_whole_captcha_accuracy: 0.8270
+30/30 - 2s - loss: 0.2993 - categorical_accuracy: 0.9001 - val_loss: 0.1831 - val_categorical_accuracy: 0.9546 - val_whole_captcha_accuracy: 0.8270 - 2s/epoch - 64ms/step
+Epoch 30/100
+ - val_whole_captcha_accuracy: 0.8101
+30/30 - 2s - loss: 0.3164 - categorical_accuracy: 0.8914 - val_loss: 0.1822 - val_categorical_accuracy: 0.9494 - val_whole_captcha_accuracy: 0.8101 - 2s/epoch - 59ms/step
+Epoch 31/100
+ - val_whole_captcha_accuracy: 0.8312
+30/30 - 2s - loss: 0.2941 - categorical_accuracy: 0.9104 - val_loss: 0.1660 - val_categorical_accuracy: 0.9546 - val_whole_captcha_accuracy: 0.8312 - 2s/epoch - 56ms/step
+Epoch 32/100
+ - val_whole_captcha_accuracy: 0.8101
+30/30 - 2s - loss: 0.2726 - categorical_accuracy: 0.9109 - val_loss: 0.1689 - val_categorical_accuracy: 0.9494 - val_whole_captcha_accuracy: 0.8101 - 2s/epoch - 53ms/step
+Epoch 33/100
+ - val_whole_captcha_accuracy: 0.8608
+30/30 - 2s - loss: 0.2567 - categorical_accuracy: 0.9209 - val_loss: 0.1511 - val_categorical_accuracy: 0.9610 - val_whole_captcha_accuracy: 0.8608 - 2s/epoch - 52ms/step
+Epoch 34/100
+ - val_whole_captcha_accuracy: 0.8312
+30/30 - 2s - loss: 0.2565 - categorical_accuracy: 0.9148 - val_loss: 0.1578 - val_categorical_accuracy: 0.9557 - val_whole_captcha_accuracy: 0.8312 - 2s/epoch - 52ms/step
+Epoch 35/100
+ - val_whole_captcha_accuracy: 0.8397
+30/30 - 2s - loss: 0.2175 - categorical_accuracy: 0.9340 - val_loss: 0.1486 - val_categorical_accuracy: 0.9568 - val_whole_captcha_accuracy: 0.8397 - 2s/epoch - 53ms/step
+Epoch 36/100
+ - val_whole_captcha_accuracy: 0.8481
+30/30 - 1s - loss: 0.2462 - categorical_accuracy: 0.9214 - val_loss: 0.1434 - val_categorical_accuracy: 0.9599 - val_whole_captcha_accuracy: 0.8481 - 1s/epoch - 50ms/step
+Epoch 37/100
+ - val_whole_captcha_accuracy: 0.8734
+30/30 - 2s - loss: 0.2416 - categorical_accuracy: 0.9214 - val_loss: 0.1287 - val_categorical_accuracy: 0.9673 - val_whole_captcha_accuracy: 0.8734 - 2s/epoch - 56ms/step
+Epoch 38/100
+ - val_whole_captcha_accuracy: 0.8819
+30/30 - 2s - loss: 0.2255 - categorical_accuracy: 0.9288 - val_loss: 0.1372 - val_categorical_accuracy: 0.9694 - val_whole_captcha_accuracy: 0.8819 - 2s/epoch - 55ms/step
+Epoch 39/100
+ - val_whole_captcha_accuracy: 0.8650
+30/30 - 2s - loss: 0.2047 - categorical_accuracy: 0.9380 - val_loss: 0.1296 - val_categorical_accuracy: 0.9652 - val_whole_captcha_accuracy: 0.8650 - 2s/epoch - 50ms/step
+Epoch 40/100
+ - val_whole_captcha_accuracy: 0.8819
+30/30 - 1s - loss: 0.2041 - categorical_accuracy: 0.9348 - val_loss: 0.1267 - val_categorical_accuracy: 0.9705 - val_whole_captcha_accuracy: 0.8819 - 1s/epoch - 50ms/step
+Epoch 41/100
+ - val_whole_captcha_accuracy: 0.8734
+30/30 - 1s - loss: 0.1894 - categorical_accuracy: 0.9372 - val_loss: 0.1350 - val_categorical_accuracy: 0.9631 - val_whole_captcha_accuracy: 0.8734 - 1s/epoch - 49ms/step
+Epoch 42/100
+ - val_whole_captcha_accuracy: 0.8945
+30/30 - 2s - loss: 0.1853 - categorical_accuracy: 0.9369 - val_loss: 0.1187 - val_categorical_accuracy: 0.9726 - val_whole_captcha_accuracy: 0.8945 - 2s/epoch - 50ms/step
+Epoch 43/100
+ - val_whole_captcha_accuracy: 0.8819
+30/30 - 1s - loss: 0.1861 - categorical_accuracy: 0.9395 - val_loss: 0.1191 - val_categorical_accuracy: 0.9694 - val_whole_captcha_accuracy: 0.8819 - 1s/epoch - 50ms/step
+Epoch 44/100
+ - val_whole_captcha_accuracy: 0.8565
+30/30 - 2s - loss: 0.1610 - categorical_accuracy: 0.9479 - val_loss: 0.1179 - val_categorical_accuracy: 0.9620 - val_whole_captcha_accuracy: 0.8565 - 2s/epoch - 51ms/step
+Epoch 45/100
+ - val_whole_captcha_accuracy: 0.8819
+30/30 - 1s - loss: 0.1759 - categorical_accuracy: 0.9385 - val_loss: 0.1147 - val_categorical_accuracy: 0.9694 - val_whole_captcha_accuracy: 0.8819 - 1s/epoch - 49ms/step
+Epoch 46/100
+ - val_whole_captcha_accuracy: 0.8903
+30/30 - 1s - loss: 0.1588 - categorical_accuracy: 0.9511 - val_loss: 0.1167 - val_categorical_accuracy: 0.9726 - val_whole_captcha_accuracy: 0.8903 - 1s/epoch - 48ms/step
+Epoch 47/100
+ - val_whole_captcha_accuracy: 0.8987
+30/30 - 2s - loss: 0.1585 - categorical_accuracy: 0.9519 - val_loss: 0.1035 - val_categorical_accuracy: 0.9736 - val_whole_captcha_accuracy: 0.8987 - 2s/epoch - 53ms/step
+Epoch 48/100
+ - val_whole_captcha_accuracy: 0.9072
+30/30 - 2s - loss: 0.1555 - categorical_accuracy: 0.9516 - val_loss: 0.0957 - val_categorical_accuracy: 0.9768 - val_whole_captcha_accuracy: 0.9072 - 2s/epoch - 51ms/step
+Epoch 49/100
+ - val_whole_captcha_accuracy: 0.8861
+30/30 - 1s - loss: 0.1475 - categorical_accuracy: 0.9498 - val_loss: 0.1155 - val_categorical_accuracy: 0.9684 - val_whole_captcha_accuracy: 0.8861 - 1s/epoch - 48ms/step
+Epoch 50/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 2s - loss: 0.1447 - categorical_accuracy: 0.9498 - val_loss: 0.0991 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9241 - 2s/epoch - 50ms/step
+Epoch 51/100
+ - val_whole_captcha_accuracy: 0.9030
+30/30 - 2s - loss: 0.1497 - categorical_accuracy: 0.9498 - val_loss: 0.1112 - val_categorical_accuracy: 0.9747 - val_whole_captcha_accuracy: 0.9030 - 2s/epoch - 52ms/step
+Epoch 52/100
+ - val_whole_captcha_accuracy: 0.8987
+30/30 - 2s - loss: 0.1390 - categorical_accuracy: 0.9529 - val_loss: 0.1034 - val_categorical_accuracy: 0.9747 - val_whole_captcha_accuracy: 0.8987 - 2s/epoch - 50ms/step
+Epoch 53/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 1s - loss: 0.1402 - categorical_accuracy: 0.9553 - val_loss: 0.0992 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9241 - 1s/epoch - 47ms/step
+Epoch 54/100
+ - val_whole_captcha_accuracy: 0.9198
+30/30 - 1s - loss: 0.1460 - categorical_accuracy: 0.9522 - val_loss: 0.0947 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9198 - 1s/epoch - 48ms/step
+Epoch 55/100
+ - val_whole_captcha_accuracy: 0.8987
+30/30 - 1s - loss: 0.1193 - categorical_accuracy: 0.9598 - val_loss: 0.1031 - val_categorical_accuracy: 0.9726 - val_whole_captcha_accuracy: 0.8987 - 1s/epoch - 48ms/step
+Epoch 56/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 1s - loss: 0.1271 - categorical_accuracy: 0.9582 - val_loss: 0.1023 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9156 - 1s/epoch - 47ms/step
+Epoch 57/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 1s - loss: 0.1107 - categorical_accuracy: 0.9664 - val_loss: 0.1002 - val_categorical_accuracy: 0.9778 - val_whole_captcha_accuracy: 0.9156 - 1s/epoch - 46ms/step
+Epoch 58/100
+ - val_whole_captcha_accuracy: 0.8819
+30/30 - 2s - loss: 0.1284 - categorical_accuracy: 0.9564 - val_loss: 0.1079 - val_categorical_accuracy: 0.9694 - val_whole_captcha_accuracy: 0.8819 - 2s/epoch - 50ms/step
+Epoch 59/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 2s - loss: 0.1192 - categorical_accuracy: 0.9627 - val_loss: 0.0959 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9156 - 2s/epoch - 51ms/step
+Epoch 60/100
+ - val_whole_captcha_accuracy: 0.9072
+30/30 - 1s - loss: 0.1188 - categorical_accuracy: 0.9606 - val_loss: 0.1051 - val_categorical_accuracy: 0.9768 - val_whole_captcha_accuracy: 0.9072 - 1s/epoch - 49ms/step
+Epoch 61/100
+ - val_whole_captcha_accuracy: 0.9072
+30/30 - 1s - loss: 0.1143 - categorical_accuracy: 0.9635 - val_loss: 0.0966 - val_categorical_accuracy: 0.9757 - val_whole_captcha_accuracy: 0.9072 - 1s/epoch - 48ms/step
+Epoch 62/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 1s - loss: 0.1246 - categorical_accuracy: 0.9587 - val_loss: 0.1020 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9156 - 1s/epoch - 47ms/step
+Epoch 63/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 1s - loss: 0.1120 - categorical_accuracy: 0.9629 - val_loss: 0.0899 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9241 - 1s/epoch - 46ms/step
+Epoch 64/100
+ - val_whole_captcha_accuracy: 0.9325
+30/30 - 1s - loss: 0.1087 - categorical_accuracy: 0.9698 - val_loss: 0.0955 - val_categorical_accuracy: 0.9831 - val_whole_captcha_accuracy: 0.9325 - 1s/epoch - 50ms/step
+Epoch 65/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 1s - loss: 0.1062 - categorical_accuracy: 0.9658 - val_loss: 0.0881 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9241 - 1s/epoch - 48ms/step
+Epoch 66/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 1s - loss: 0.0954 - categorical_accuracy: 0.9698 - val_loss: 0.0932 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9156 - 1s/epoch - 45ms/step
+Epoch 67/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 1s - loss: 0.0939 - categorical_accuracy: 0.9685 - val_loss: 0.1028 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9156 - 1s/epoch - 46ms/step
+Epoch 68/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 1s - loss: 0.1083 - categorical_accuracy: 0.9645 - val_loss: 0.0921 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9156 - 1s/epoch - 43ms/step
+Epoch 69/100
+ - val_whole_captcha_accuracy: 0.9198
+30/30 - 1s - loss: 0.0952 - categorical_accuracy: 0.9708 - val_loss: 0.0944 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9198 - 1s/epoch - 50ms/step
+Epoch 70/100
+ - val_whole_captcha_accuracy: 0.9072
+30/30 - 1s - loss: 0.0952 - categorical_accuracy: 0.9703 - val_loss: 0.0943 - val_categorical_accuracy: 0.9757 - val_whole_captcha_accuracy: 0.9072 - 1s/epoch - 47ms/step
+Epoch 71/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 1s - loss: 0.0895 - categorical_accuracy: 0.9713 - val_loss: 0.0857 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9156 - 1s/epoch - 45ms/step
+Epoch 72/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 1s - loss: 0.0884 - categorical_accuracy: 0.9737 - val_loss: 0.0810 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9241 - 1s/epoch - 49ms/step
+Epoch 73/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 1s - loss: 0.0941 - categorical_accuracy: 0.9690 - val_loss: 0.0943 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9241 - 1s/epoch - 46ms/step
+Epoch 74/100
+ - val_whole_captcha_accuracy: 0.9030
+30/30 - 1s - loss: 0.0880 - categorical_accuracy: 0.9748 - val_loss: 0.1000 - val_categorical_accuracy: 0.9757 - val_whole_captcha_accuracy: 0.9030 - 1s/epoch - 47ms/step
+Epoch 75/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 1s - loss: 0.0910 - categorical_accuracy: 0.9729 - val_loss: 0.0934 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9241 - 1s/epoch - 47ms/step
+Epoch 76/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 1s - loss: 0.0860 - categorical_accuracy: 0.9737 - val_loss: 0.0912 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9241 - 1s/epoch - 48ms/step
+Epoch 77/100
+ - val_whole_captcha_accuracy: 0.9198
+30/30 - 1s - loss: 0.0897 - categorical_accuracy: 0.9727 - val_loss: 0.0901 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9198 - 1s/epoch - 44ms/step
+Epoch 78/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 1s - loss: 0.0845 - categorical_accuracy: 0.9732 - val_loss: 0.0915 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9241 - 1s/epoch - 43ms/step
+Epoch 79/100
+ - val_whole_captcha_accuracy: 0.9072
+30/30 - 1s - loss: 0.0769 - categorical_accuracy: 0.9758 - val_loss: 0.0929 - val_categorical_accuracy: 0.9768 - val_whole_captcha_accuracy: 0.9072 - 1s/epoch - 45ms/step
+Epoch 80/100
+ - val_whole_captcha_accuracy: 0.9114
+30/30 - 1s - loss: 0.0789 - categorical_accuracy: 0.9724 - val_loss: 0.0912 - val_categorical_accuracy: 0.9778 - val_whole_captcha_accuracy: 0.9114 - 1s/epoch - 48ms/step
+Epoch 81/100
+ - val_whole_captcha_accuracy: 0.9198
+30/30 - 1s - loss: 0.0819 - categorical_accuracy: 0.9740 - val_loss: 0.0992 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9198 - 1s/epoch - 47ms/step
+Epoch 82/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 1s - loss: 0.0717 - categorical_accuracy: 0.9784 - val_loss: 0.0819 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9451 - 1s/epoch - 50ms/step
+Epoch 83/100
+ - val_whole_captcha_accuracy: 0.9283
+30/30 - 1s - loss: 0.0737 - categorical_accuracy: 0.9769 - val_loss: 0.0886 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9283 - 1s/epoch - 47ms/step
+Epoch 84/100
+ - val_whole_captcha_accuracy: 0.8903
+30/30 - 1s - loss: 0.0745 - categorical_accuracy: 0.9787 - val_loss: 0.1164 - val_categorical_accuracy: 0.9715 - val_whole_captcha_accuracy: 0.8903 - 1s/epoch - 46ms/step
+Epoch 85/100
+ - val_whole_captcha_accuracy: 0.9198
+30/30 - 1s - loss: 0.0701 - categorical_accuracy: 0.9740 - val_loss: 0.0851 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9198 - 1s/epoch - 45ms/step
+Epoch 86/100
+ - val_whole_captcha_accuracy: 0.9578
+30/30 - 1s - loss: 0.0877 - categorical_accuracy: 0.9742 - val_loss: 0.0866 - val_categorical_accuracy: 0.9895 - val_whole_captcha_accuracy: 0.9578 - 1s/epoch - 47ms/step
+Epoch 87/100
+ - val_whole_captcha_accuracy: 0.9325
+30/30 - 1s - loss: 0.0653 - categorical_accuracy: 0.9816 - val_loss: 0.0865 - val_categorical_accuracy: 0.9831 - val_whole_captcha_accuracy: 0.9325 - 1s/epoch - 45ms/step
+Epoch 88/100
+ - val_whole_captcha_accuracy: 0.9367
+30/30 - 2s - loss: 0.0626 - categorical_accuracy: 0.9813 - val_loss: 0.0827 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9367 - 2s/epoch - 52ms/step
+Epoch 89/100
+ - val_whole_captcha_accuracy: 0.9325
+30/30 - 2s - loss: 0.0762 - categorical_accuracy: 0.9763 - val_loss: 0.0827 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9325 - 2s/epoch - 60ms/step
+Epoch 90/100
+ - val_whole_captcha_accuracy: 0.9283
+30/30 - 2s - loss: 0.0700 - categorical_accuracy: 0.9771 - val_loss: 0.0876 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9283 - 2s/epoch - 60ms/step
+Epoch 91/100
+ - val_whole_captcha_accuracy: 0.9494
+30/30 - 2s - loss: 0.0679 - categorical_accuracy: 0.9795 - val_loss: 0.0812 - val_categorical_accuracy: 0.9873 - val_whole_captcha_accuracy: 0.9494 - 2s/epoch - 58ms/step
+Epoch 92/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 2s - loss: 0.0625 - categorical_accuracy: 0.9803 - val_loss: 0.0820 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9451 - 2s/epoch - 65ms/step
+Epoch 93/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 2s - loss: 0.0778 - categorical_accuracy: 0.9758 - val_loss: 0.0909 - val_categorical_accuracy: 0.9778 - val_whole_captcha_accuracy: 0.9156 - 2s/epoch - 55ms/step
+Epoch 94/100
+ - val_whole_captcha_accuracy: 0.9367
+30/30 - 2s - loss: 0.0620 - categorical_accuracy: 0.9805 - val_loss: 0.0887 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9367 - 2s/epoch - 53ms/step
+Epoch 95/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 2s - loss: 0.0804 - categorical_accuracy: 0.9742 - val_loss: 0.0940 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9241 - 2s/epoch - 63ms/step
+Epoch 96/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 2s - loss: 0.0880 - categorical_accuracy: 0.9719 - val_loss: 0.1002 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9241 - 2s/epoch - 64ms/step
+Epoch 97/100
+ - val_whole_captcha_accuracy: 0.9114
+30/30 - 2s - loss: 0.0585 - categorical_accuracy: 0.9813 - val_loss: 0.0893 - val_categorical_accuracy: 0.9778 - val_whole_captcha_accuracy: 0.9114 - 2s/epoch - 69ms/step
+Epoch 98/100
+ - val_whole_captcha_accuracy: 0.9325
+30/30 - 2s - loss: 0.0546 - categorical_accuracy: 0.9811 - val_loss: 0.0820 - val_categorical_accuracy: 0.9831 - val_whole_captcha_accuracy: 0.9325 - 2s/epoch - 66ms/step
+Epoch 99/100
+ - val_whole_captcha_accuracy: 0.9283
+30/30 - 2s - loss: 0.0557 - categorical_accuracy: 0.9816 - val_loss: 0.0822 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9283 - 2s/epoch - 60ms/step
+Epoch 100/100
+ - val_whole_captcha_accuracy: 0.9030
+30/30 - 2s - loss: 0.0590 - categorical_accuracy: 0.9821 - val_loss: 0.1181 - val_categorical_accuracy: 0.9736 - val_whole_captcha_accuracy: 0.9030 - 2s/epoch - 54ms/step
+Epoch 1/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 4s - loss: 3.4693 - categorical_accuracy: 0.0326 - val_loss: 3.4665 - val_categorical_accuracy: 0.0264 - val_whole_captcha_accuracy: 0.0000e+00 - 4s/epoch - 125ms/step
+Epoch 2/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 2s - loss: 3.4632 - categorical_accuracy: 0.0336 - val_loss: 3.4684 - val_categorical_accuracy: 0.0264 - val_whole_captcha_accuracy: 0.0000e+00 - 2s/epoch - 58ms/step
+Epoch 3/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 2s - loss: 3.4633 - categorical_accuracy: 0.0344 - val_loss: 3.4658 - val_categorical_accuracy: 0.0295 - val_whole_captcha_accuracy: 0.0000e+00 - 2s/epoch - 58ms/step
+Epoch 4/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 2s - loss: 3.4589 - categorical_accuracy: 0.0418 - val_loss: 3.4607 - val_categorical_accuracy: 0.0549 - val_whole_captcha_accuracy: 0.0000e+00 - 2s/epoch - 55ms/step
+Epoch 5/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 2s - loss: 3.4113 - categorical_accuracy: 0.0647 - val_loss: 3.2851 - val_categorical_accuracy: 0.1192 - val_whole_captcha_accuracy: 0.0000e+00 - 2s/epoch - 53ms/step
+Epoch 6/100
+ - val_whole_captcha_accuracy: 0.0000
+30/30 - 2s - loss: 3.1363 - categorical_accuracy: 0.1285 - val_loss: 2.8513 - val_categorical_accuracy: 0.1930 - val_whole_captcha_accuracy: 0.0000e+00 - 2s/epoch - 55ms/step
+Epoch 7/100
+ - val_whole_captcha_accuracy: 0.0042
+30/30 - 2s - loss: 2.7516 - categorical_accuracy: 0.2192 - val_loss: 2.4249 - val_categorical_accuracy: 0.3049 - val_whole_captcha_accuracy: 0.0042 - 2s/epoch - 57ms/step
+Epoch 8/100
+ - val_whole_captcha_accuracy: 0.0169
+30/30 - 2s - loss: 2.4350 - categorical_accuracy: 0.2931 - val_loss: 2.0575 - val_categorical_accuracy: 0.3956 - val_whole_captcha_accuracy: 0.0169 - 2s/epoch - 57ms/step
+Epoch 9/100
+ - val_whole_captcha_accuracy: 0.0549
+30/30 - 2s - loss: 2.0158 - categorical_accuracy: 0.3985 - val_loss: 1.6676 - val_categorical_accuracy: 0.5127 - val_whole_captcha_accuracy: 0.0549 - 2s/epoch - 57ms/step
+Epoch 10/100
+ - val_whole_captcha_accuracy: 0.1477
+30/30 - 2s - loss: 1.6707 - categorical_accuracy: 0.5008 - val_loss: 1.2520 - val_categorical_accuracy: 0.6287 - val_whole_captcha_accuracy: 0.1477 - 2s/epoch - 57ms/step
+Epoch 11/100
+ - val_whole_captcha_accuracy: 0.2869
+30/30 - 2s - loss: 1.3776 - categorical_accuracy: 0.5702 - val_loss: 0.9696 - val_categorical_accuracy: 0.7226 - val_whole_captcha_accuracy: 0.2869 - 2s/epoch - 61ms/step
+Epoch 12/100
+ - val_whole_captcha_accuracy: 0.3165
+30/30 - 2s - loss: 1.0709 - categorical_accuracy: 0.6575 - val_loss: 0.7811 - val_categorical_accuracy: 0.7437 - val_whole_captcha_accuracy: 0.3165 - 2s/epoch - 59ms/step
+Epoch 13/100
+ - val_whole_captcha_accuracy: 0.3924
+30/30 - 2s - loss: 0.8826 - categorical_accuracy: 0.7250 - val_loss: 0.6882 - val_categorical_accuracy: 0.7922 - val_whole_captcha_accuracy: 0.3924 - 2s/epoch - 59ms/step
+Epoch 14/100
+ - val_whole_captcha_accuracy: 0.4810
+30/30 - 2s - loss: 0.7143 - categorical_accuracy: 0.7742 - val_loss: 0.5711 - val_categorical_accuracy: 0.8270 - val_whole_captcha_accuracy: 0.4810 - 2s/epoch - 62ms/step
+Epoch 15/100
+ - val_whole_captcha_accuracy: 0.6160
+30/30 - 2s - loss: 0.6296 - categorical_accuracy: 0.7984 - val_loss: 0.4196 - val_categorical_accuracy: 0.8797 - val_whole_captcha_accuracy: 0.6160 - 2s/epoch - 56ms/step
+Epoch 16/100
+ - val_whole_captcha_accuracy: 0.6624
+30/30 - 2s - loss: 0.5379 - categorical_accuracy: 0.8273 - val_loss: 0.3474 - val_categorical_accuracy: 0.8935 - val_whole_captcha_accuracy: 0.6624 - 2s/epoch - 55ms/step
+Epoch 17/100
+ - val_whole_captcha_accuracy: 0.6582
+30/30 - 2s - loss: 0.4887 - categorical_accuracy: 0.8507 - val_loss: 0.3154 - val_categorical_accuracy: 0.9030 - val_whole_captcha_accuracy: 0.6582 - 2s/epoch - 53ms/step
+Epoch 18/100
+ - val_whole_captcha_accuracy: 0.7131
+30/30 - 2s - loss: 0.4283 - categorical_accuracy: 0.8662 - val_loss: 0.2716 - val_categorical_accuracy: 0.9167 - val_whole_captcha_accuracy: 0.7131 - 2s/epoch - 55ms/step
+Epoch 19/100
+ - val_whole_captcha_accuracy: 0.7595
+30/30 - 2s - loss: 0.3837 - categorical_accuracy: 0.8796 - val_loss: 0.2105 - val_categorical_accuracy: 0.9367 - val_whole_captcha_accuracy: 0.7595 - 2s/epoch - 57ms/step
+Epoch 20/100
+ - val_whole_captcha_accuracy: 0.7806
+30/30 - 2s - loss: 0.3448 - categorical_accuracy: 0.8946 - val_loss: 0.1936 - val_categorical_accuracy: 0.9420 - val_whole_captcha_accuracy: 0.7806 - 2s/epoch - 55ms/step
+Epoch 21/100
+ - val_whole_captcha_accuracy: 0.8397
+30/30 - 2s - loss: 0.3141 - categorical_accuracy: 0.9062 - val_loss: 0.1625 - val_categorical_accuracy: 0.9568 - val_whole_captcha_accuracy: 0.8397 - 2s/epoch - 54ms/step
+Epoch 22/100
+ - val_whole_captcha_accuracy: 0.8186
+30/30 - 2s - loss: 0.3001 - categorical_accuracy: 0.9048 - val_loss: 0.1492 - val_categorical_accuracy: 0.9504 - val_whole_captcha_accuracy: 0.8186 - 2s/epoch - 53ms/step
+Epoch 23/100
+ - val_whole_captcha_accuracy: 0.8650
+30/30 - 2s - loss: 0.2804 - categorical_accuracy: 0.9080 - val_loss: 0.1325 - val_categorical_accuracy: 0.9662 - val_whole_captcha_accuracy: 0.8650 - 2s/epoch - 54ms/step
+Epoch 24/100
+ - val_whole_captcha_accuracy: 0.8776
+30/30 - 2s - loss: 0.2603 - categorical_accuracy: 0.9180 - val_loss: 0.1233 - val_categorical_accuracy: 0.9673 - val_whole_captcha_accuracy: 0.8776 - 2s/epoch - 55ms/step
+Epoch 25/100
+ - val_whole_captcha_accuracy: 0.8186
+30/30 - 2s - loss: 0.2435 - categorical_accuracy: 0.9214 - val_loss: 0.1470 - val_categorical_accuracy: 0.9483 - val_whole_captcha_accuracy: 0.8186 - 2s/epoch - 52ms/step
+Epoch 26/100
+ - val_whole_captcha_accuracy: 0.8692
+30/30 - 2s - loss: 0.2245 - categorical_accuracy: 0.9327 - val_loss: 0.1121 - val_categorical_accuracy: 0.9662 - val_whole_captcha_accuracy: 0.8692 - 2s/epoch - 52ms/step
+Epoch 27/100
+ - val_whole_captcha_accuracy: 0.8819
+30/30 - 2s - loss: 0.2087 - categorical_accuracy: 0.9390 - val_loss: 0.1054 - val_categorical_accuracy: 0.9705 - val_whole_captcha_accuracy: 0.8819 - 2s/epoch - 53ms/step
+Epoch 28/100
+ - val_whole_captcha_accuracy: 0.8987
+30/30 - 2s - loss: 0.2098 - categorical_accuracy: 0.9364 - val_loss: 0.0857 - val_categorical_accuracy: 0.9747 - val_whole_captcha_accuracy: 0.8987 - 2s/epoch - 55ms/step
+Epoch 29/100
+ - val_whole_captcha_accuracy: 0.8903
+30/30 - 2s - loss: 0.1980 - categorical_accuracy: 0.9366 - val_loss: 0.0989 - val_categorical_accuracy: 0.9715 - val_whole_captcha_accuracy: 0.8903 - 2s/epoch - 52ms/step
+Epoch 30/100
+ - val_whole_captcha_accuracy: 0.8692
+30/30 - 2s - loss: 0.1826 - categorical_accuracy: 0.9451 - val_loss: 0.0960 - val_categorical_accuracy: 0.9673 - val_whole_captcha_accuracy: 0.8692 - 2s/epoch - 52ms/step
+Epoch 31/100
+ - val_whole_captcha_accuracy: 0.9072
+30/30 - 2s - loss: 0.1661 - categorical_accuracy: 0.9493 - val_loss: 0.0898 - val_categorical_accuracy: 0.9757 - val_whole_captcha_accuracy: 0.9072 - 2s/epoch - 54ms/step
+Epoch 32/100
+ - val_whole_captcha_accuracy: 0.9283
+30/30 - 2s - loss: 0.1698 - categorical_accuracy: 0.9487 - val_loss: 0.0737 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9283 - 2s/epoch - 54ms/step
+Epoch 33/100
+ - val_whole_captcha_accuracy: 0.9030
+30/30 - 2s - loss: 0.1606 - categorical_accuracy: 0.9472 - val_loss: 0.0931 - val_categorical_accuracy: 0.9757 - val_whole_captcha_accuracy: 0.9030 - 2s/epoch - 52ms/step
+Epoch 34/100
+ - val_whole_captcha_accuracy: 0.9283
+30/30 - 2s - loss: 0.1457 - categorical_accuracy: 0.9548 - val_loss: 0.0656 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9283 - 2s/epoch - 52ms/step
+Epoch 35/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 2s - loss: 0.1295 - categorical_accuracy: 0.9624 - val_loss: 0.0678 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9241 - 2s/epoch - 55ms/step
+Epoch 36/100
+ - val_whole_captcha_accuracy: 0.8903
+30/30 - 1s - loss: 0.1393 - categorical_accuracy: 0.9590 - val_loss: 0.0785 - val_categorical_accuracy: 0.9715 - val_whole_captcha_accuracy: 0.8903 - 1s/epoch - 49ms/step
+Epoch 37/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 1s - loss: 0.1331 - categorical_accuracy: 0.9590 - val_loss: 0.0684 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9241 - 1s/epoch - 50ms/step
+Epoch 38/100
+ - val_whole_captcha_accuracy: 0.9494
+30/30 - 2s - loss: 0.1256 - categorical_accuracy: 0.9616 - val_loss: 0.0523 - val_categorical_accuracy: 0.9873 - val_whole_captcha_accuracy: 0.9494 - 2s/epoch - 54ms/step
+Epoch 39/100
+ - val_whole_captcha_accuracy: 0.9241
+30/30 - 2s - loss: 0.1149 - categorical_accuracy: 0.9656 - val_loss: 0.0610 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9241 - 2s/epoch - 50ms/step
+Epoch 40/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 2s - loss: 0.1130 - categorical_accuracy: 0.9656 - val_loss: 0.0600 - val_categorical_accuracy: 0.9789 - val_whole_captcha_accuracy: 0.9156 - 2s/epoch - 50ms/step
+Epoch 41/100
+ - val_whole_captcha_accuracy: 0.9198
+30/30 - 2s - loss: 0.1178 - categorical_accuracy: 0.9627 - val_loss: 0.0689 - val_categorical_accuracy: 0.9800 - val_whole_captcha_accuracy: 0.9198 - 2s/epoch - 51ms/step
+Epoch 42/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 2s - loss: 0.1089 - categorical_accuracy: 0.9664 - val_loss: 0.0608 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9451 - 2s/epoch - 51ms/step
+Epoch 43/100
+ - val_whole_captcha_accuracy: 0.9114
+30/30 - 2s - loss: 0.0961 - categorical_accuracy: 0.9706 - val_loss: 0.0609 - val_categorical_accuracy: 0.9768 - val_whole_captcha_accuracy: 0.9114 - 2s/epoch - 51ms/step
+Epoch 44/100
+ - val_whole_captcha_accuracy: 0.9494
+30/30 - 1s - loss: 0.0950 - categorical_accuracy: 0.9692 - val_loss: 0.0420 - val_categorical_accuracy: 0.9873 - val_whole_captcha_accuracy: 0.9494 - 1s/epoch - 50ms/step
+Epoch 45/100
+ - val_whole_captcha_accuracy: 0.9325
+30/30 - 2s - loss: 0.0907 - categorical_accuracy: 0.9713 - val_loss: 0.0571 - val_categorical_accuracy: 0.9831 - val_whole_captcha_accuracy: 0.9325 - 2s/epoch - 53ms/step
+Epoch 46/100
+ - val_whole_captcha_accuracy: 0.9114
+30/30 - 1s - loss: 0.0879 - categorical_accuracy: 0.9729 - val_loss: 0.0674 - val_categorical_accuracy: 0.9778 - val_whole_captcha_accuracy: 0.9114 - 1s/epoch - 49ms/step
+Epoch 47/100
+ - val_whole_captcha_accuracy: 0.9156
+30/30 - 2s - loss: 0.0990 - categorical_accuracy: 0.9677 - val_loss: 0.0653 - val_categorical_accuracy: 0.9778 - val_whole_captcha_accuracy: 0.9156 - 2s/epoch - 51ms/step
+Epoch 48/100
+ - val_whole_captcha_accuracy: 0.9325
+30/30 - 2s - loss: 0.0783 - categorical_accuracy: 0.9756 - val_loss: 0.0507 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9325 - 2s/epoch - 50ms/step
+Epoch 49/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 2s - loss: 0.0944 - categorical_accuracy: 0.9690 - val_loss: 0.0475 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9451 - 2s/epoch - 53ms/step
+Epoch 50/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 2s - loss: 0.0826 - categorical_accuracy: 0.9756 - val_loss: 0.0500 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9451 - 2s/epoch - 51ms/step
+Epoch 51/100
+ - val_whole_captcha_accuracy: 0.9325
+30/30 - 2s - loss: 0.0758 - categorical_accuracy: 0.9769 - val_loss: 0.0459 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9325 - 2s/epoch - 52ms/step
+Epoch 52/100
+ - val_whole_captcha_accuracy: 0.9409
+30/30 - 2s - loss: 0.0656 - categorical_accuracy: 0.9813 - val_loss: 0.0463 - val_categorical_accuracy: 0.9852 - val_whole_captcha_accuracy: 0.9409 - 2s/epoch - 50ms/step
+Epoch 53/100
+ - val_whole_captcha_accuracy: 0.9494
+30/30 - 2s - loss: 0.0843 - categorical_accuracy: 0.9748 - val_loss: 0.0505 - val_categorical_accuracy: 0.9873 - val_whole_captcha_accuracy: 0.9494 - 2s/epoch - 52ms/step
+Epoch 54/100
+ - val_whole_captcha_accuracy: 0.9325
+30/30 - 1s - loss: 0.0801 - categorical_accuracy: 0.9745 - val_loss: 0.0426 - val_categorical_accuracy: 0.9821 - val_whole_captcha_accuracy: 0.9325 - 1s/epoch - 49ms/step
+Epoch 55/100
+ - val_whole_captcha_accuracy: 0.9409
+30/30 - 2s - loss: 0.0730 - categorical_accuracy: 0.9737 - val_loss: 0.0420 - val_categorical_accuracy: 0.9852 - val_whole_captcha_accuracy: 0.9409 - 2s/epoch - 51ms/step
+Epoch 56/100
+ - val_whole_captcha_accuracy: 0.9578
+30/30 - 2s - loss: 0.0756 - categorical_accuracy: 0.9766 - val_loss: 0.0471 - val_categorical_accuracy: 0.9884 - val_whole_captcha_accuracy: 0.9578 - 2s/epoch - 55ms/step
+Epoch 57/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 2s - loss: 0.0655 - categorical_accuracy: 0.9800 - val_loss: 0.0417 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9451 - 2s/epoch - 51ms/step
+Epoch 58/100
+ - val_whole_captcha_accuracy: 0.9409
+30/30 - 2s - loss: 0.0661 - categorical_accuracy: 0.9777 - val_loss: 0.0342 - val_categorical_accuracy: 0.9852 - val_whole_captcha_accuracy: 0.9409 - 2s/epoch - 51ms/step
+Epoch 59/100
+ - val_whole_captcha_accuracy: 0.9620
+30/30 - 2s - loss: 0.0579 - categorical_accuracy: 0.9848 - val_loss: 0.0368 - val_categorical_accuracy: 0.9895 - val_whole_captcha_accuracy: 0.9620 - 2s/epoch - 57ms/step
+Epoch 60/100
+ - val_whole_captcha_accuracy: 0.9536
+30/30 - 2s - loss: 0.0574 - categorical_accuracy: 0.9834 - val_loss: 0.0399 - val_categorical_accuracy: 0.9884 - val_whole_captcha_accuracy: 0.9536 - 2s/epoch - 52ms/step
+Epoch 61/100
+ - val_whole_captcha_accuracy: 0.9367
+30/30 - 2s - loss: 0.0572 - categorical_accuracy: 0.9837 - val_loss: 0.0446 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9367 - 2s/epoch - 51ms/step
+Epoch 62/100
+ - val_whole_captcha_accuracy: 0.9662
+30/30 - 2s - loss: 0.0601 - categorical_accuracy: 0.9811 - val_loss: 0.0364 - val_categorical_accuracy: 0.9916 - val_whole_captcha_accuracy: 0.9662 - 2s/epoch - 54ms/step
+Epoch 63/100
+ - val_whole_captcha_accuracy: 0.9409
+30/30 - 2s - loss: 0.0589 - categorical_accuracy: 0.9821 - val_loss: 0.0437 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9409 - 2s/epoch - 51ms/step
+Epoch 64/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 2s - loss: 0.0637 - categorical_accuracy: 0.9790 - val_loss: 0.0528 - val_categorical_accuracy: 0.9852 - val_whole_captcha_accuracy: 0.9451 - 2s/epoch - 52ms/step
+Epoch 65/100
+ - val_whole_captcha_accuracy: 0.9705
+30/30 - 2s - loss: 0.0581 - categorical_accuracy: 0.9813 - val_loss: 0.0332 - val_categorical_accuracy: 0.9916 - val_whole_captcha_accuracy: 0.9705 - 2s/epoch - 53ms/step
+Epoch 66/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 2s - loss: 0.0478 - categorical_accuracy: 0.9829 - val_loss: 0.0354 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9451 - 2s/epoch - 54ms/step
+Epoch 67/100
+ - val_whole_captcha_accuracy: 0.9747
+30/30 - 2s - loss: 0.0449 - categorical_accuracy: 0.9866 - val_loss: 0.0264 - val_categorical_accuracy: 0.9937 - val_whole_captcha_accuracy: 0.9747 - 2s/epoch - 53ms/step
+Epoch 68/100
+ - val_whole_captcha_accuracy: 0.9620
+30/30 - 2s - loss: 0.0439 - categorical_accuracy: 0.9845 - val_loss: 0.0283 - val_categorical_accuracy: 0.9905 - val_whole_captcha_accuracy: 0.9620 - 2s/epoch - 50ms/step
+Epoch 69/100
+ - val_whole_captcha_accuracy: 0.9705
+30/30 - 1s - loss: 0.0490 - categorical_accuracy: 0.9853 - val_loss: 0.0244 - val_categorical_accuracy: 0.9926 - val_whole_captcha_accuracy: 0.9705 - 1s/epoch - 50ms/step
+Epoch 70/100
+ - val_whole_captcha_accuracy: 0.9536
+30/30 - 1s - loss: 0.0510 - categorical_accuracy: 0.9837 - val_loss: 0.0321 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9536 - 1s/epoch - 42ms/step
+Epoch 71/100
+ - val_whole_captcha_accuracy: 0.9367
+30/30 - 1s - loss: 0.0506 - categorical_accuracy: 0.9848 - val_loss: 0.0329 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9367 - 1s/epoch - 37ms/step
+Epoch 72/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 1s - loss: 0.0534 - categorical_accuracy: 0.9829 - val_loss: 0.0345 - val_categorical_accuracy: 0.9863 - val_whole_captcha_accuracy: 0.9451 - 1s/epoch - 38ms/step
+Epoch 73/100
+ - val_whole_captcha_accuracy: 0.9705
+30/30 - 1s - loss: 0.0494 - categorical_accuracy: 0.9824 - val_loss: 0.0240 - val_categorical_accuracy: 0.9926 - val_whole_captcha_accuracy: 0.9705 - 1s/epoch - 37ms/step
+Epoch 74/100
+ - val_whole_captcha_accuracy: 0.9620
+30/30 - 1s - loss: 0.0406 - categorical_accuracy: 0.9874 - val_loss: 0.0337 - val_categorical_accuracy: 0.9895 - val_whole_captcha_accuracy: 0.9620 - 1s/epoch - 36ms/step
+Epoch 75/100
+ - val_whole_captcha_accuracy: 0.9578
+30/30 - 1s - loss: 0.0393 - categorical_accuracy: 0.9874 - val_loss: 0.0434 - val_categorical_accuracy: 0.9895 - val_whole_captcha_accuracy: 0.9578 - 1s/epoch - 35ms/step
+Epoch 76/100
+ - val_whole_captcha_accuracy: 0.9283
+30/30 - 1s - loss: 0.0647 - categorical_accuracy: 0.9771 - val_loss: 0.0407 - val_categorical_accuracy: 0.9810 - val_whole_captcha_accuracy: 0.9283 - 1s/epoch - 35ms/step
+Epoch 77/100
+ - val_whole_captcha_accuracy: 0.9367
+30/30 - 1s - loss: 0.0459 - categorical_accuracy: 0.9853 - val_loss: 0.0491 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9367 - 1s/epoch - 37ms/step
+Epoch 78/100
+ - val_whole_captcha_accuracy: 0.9494
+30/30 - 1s - loss: 0.0453 - categorical_accuracy: 0.9876 - val_loss: 0.0368 - val_categorical_accuracy: 0.9873 - val_whole_captcha_accuracy: 0.9494 - 1s/epoch - 35ms/step
+Epoch 79/100
+ - val_whole_captcha_accuracy: 0.9409
+30/30 - 1s - loss: 0.0418 - categorical_accuracy: 0.9869 - val_loss: 0.0511 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9409 - 1s/epoch - 37ms/step
+Epoch 80/100
+ - val_whole_captcha_accuracy: 0.9367
+30/30 - 1s - loss: 0.0564 - categorical_accuracy: 0.9824 - val_loss: 0.0461 - val_categorical_accuracy: 0.9842 - val_whole_captcha_accuracy: 0.9367 - 1s/epoch - 34ms/step
+Epoch 81/100
+ - val_whole_captcha_accuracy: 0.9578
+30/30 - 1s - loss: 0.0417 - categorical_accuracy: 0.9884 - val_loss: 0.0304 - val_categorical_accuracy: 0.9895 - val_whole_captcha_accuracy: 0.9578 - 1s/epoch - 35ms/step
+Epoch 82/100
+ - val_whole_captcha_accuracy: 0.9662
+30/30 - 1s - loss: 0.0394 - categorical_accuracy: 0.9876 - val_loss: 0.0327 - val_categorical_accuracy: 0.9916 - val_whole_captcha_accuracy: 0.9662 - 1s/epoch - 36ms/step
+Epoch 83/100
+ - val_whole_captcha_accuracy: 0.9578
+30/30 - 1s - loss: 0.0334 - categorical_accuracy: 0.9911 - val_loss: 0.0273 - val_categorical_accuracy: 0.9895 - val_whole_captcha_accuracy: 0.9578 - 1s/epoch - 34ms/step
+Epoch 84/100
+ - val_whole_captcha_accuracy: 0.9620
+30/30 - 1s - loss: 0.0381 - categorical_accuracy: 0.9869 - val_loss: 0.0325 - val_categorical_accuracy: 0.9905 - val_whole_captcha_accuracy: 0.9620 - 1s/epoch - 37ms/step
+Epoch 85/100
+ - val_whole_captcha_accuracy: 0.9620
+30/30 - 1s - loss: 0.0313 - categorical_accuracy: 0.9911 - val_loss: 0.0310 - val_categorical_accuracy: 0.9905 - val_whole_captcha_accuracy: 0.9620 - 1s/epoch - 36ms/step
+Epoch 86/100
+ - val_whole_captcha_accuracy: 0.9494
+30/30 - 1s - loss: 0.0394 - categorical_accuracy: 0.9871 - val_loss: 0.0426 - val_categorical_accuracy: 0.9873 - val_whole_captcha_accuracy: 0.9494 - 1s/epoch - 35ms/step
+Epoch 87/100
+ - val_whole_captcha_accuracy: 0.9409
+30/30 - 1s - loss: 0.0356 - categorical_accuracy: 0.9876 - val_loss: 0.0487 - val_categorical_accuracy: 0.9852 - val_whole_captcha_accuracy: 0.9409 - 1s/epoch - 34ms/step
+Epoch 88/100
+ - val_whole_captcha_accuracy: 0.9662
+30/30 - 1s - loss: 0.0307 - categorical_accuracy: 0.9897 - val_loss: 0.0334 - val_categorical_accuracy: 0.9905 - val_whole_captcha_accuracy: 0.9662 - 1s/epoch - 33ms/step
+Epoch 89/100
+ - val_whole_captcha_accuracy: 0.9620
+30/30 - 1s - loss: 0.0349 - categorical_accuracy: 0.9908 - val_loss: 0.0305 - val_categorical_accuracy: 0.9905 - val_whole_captcha_accuracy: 0.9620 - 1s/epoch - 35ms/step
+Epoch 90/100
+ - val_whole_captcha_accuracy: 0.9705
+30/30 - 1s - loss: 0.0256 - categorical_accuracy: 0.9924 - val_loss: 0.0222 - val_categorical_accuracy: 0.9926 - val_whole_captcha_accuracy: 0.9705 - 1s/epoch - 34ms/step
+Epoch 91/100
+ - val_whole_captcha_accuracy: 0.9451
+30/30 - 1s - loss: 0.0341 - categorical_accuracy: 0.9879 - val_loss: 0.0505 - val_categorical_accuracy: 0.9852 - val_whole_captcha_accuracy: 0.9451 - 1s/epoch - 37ms/step
+Epoch 92/100
+ - val_whole_captcha_accuracy: 0.9578
+30/30 - 1s - loss: 0.0394 - categorical_accuracy: 0.9876 - val_loss: 0.0383 - val_categorical_accuracy: 0.9895 - val_whole_captcha_accuracy: 0.9578 - 1s/epoch - 34ms/step
+{
+  "images": 1188,
+  "folds": 5,
+  "mean_whole_accuracy": 0.9495231003793922,
+  "std_whole_accuracy": 0.021713295100747296,
+  "results": [
+    {
+      "fold": 1,
+      "training_images": 950,
+      "validation_images": 238,
+      "best_epoch": 94,
+      "whole_accuracy": 0.9117647058823529,
+      "character_accuracy": 0.9758403361344538,
+      "weights": "C:\\Users\\yuuuiv\\Downloads\\npedi\\npedi-train\\captcha-model\\cross-validation\\fold-1.weights.h5"
+    },
+    {
+      "fold": 2,
+      "training_images": 950,
+      "validation_images": 238,
+      "best_epoch": 97,
+      "whole_accuracy": 0.9621848739495799,
+      "character_accuracy": 0.990546218487395,
+      "weights": "C:\\Users\\yuuuiv\\Downloads\\npedi\\npedi-train\\captcha-model\\cross-validation\\fold-2.weights.h5"
+    },
+    {
+      "fold": 3,
+      "training_images": 950,
+      "validation_images": 238,
+      "best_epoch": 71,
+      "whole_accuracy": 0.9411764705882353,
+      "character_accuracy": 0.9831932773109243,
+      "weights": "C:\\Users\\yuuuiv\\Downloads\\npedi\\npedi-train\\captcha-model\\cross-validation\\fold-3.weights.h5"
+    },
+    {
+      "fold": 4,
+      "training_images": 951,
+      "validation_images": 237,
+      "best_epoch": 86,
+      "whole_accuracy": 0.9578059071729957,
+      "character_accuracy": 0.989451476793249,
+      "weights": "C:\\Users\\yuuuiv\\Downloads\\npedi\\npedi-train\\captcha-model\\cross-validation\\fold-4.weights.h5"
+    },
+    {
+      "fold": 5,
+      "training_images": 951,
+      "validation_images": 237,
+      "best_epoch": 67,
+      "whole_accuracy": 0.9746835443037974,
+      "character_accuracy": 0.9936708860759493,
+      "weights": "C:\\Users\\yuuuiv\\Downloads\\npedi\\npedi-train\\captcha-model\\cross-validation\\fold-5.weights.h5"
+    }
+  ]
+}
