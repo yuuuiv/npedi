@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.captcha-cnn-venv/
+
+# 训练产物：权重不入库，各自本地训练生成
+captcha-model/
+
+# 标注脚本的临时预览目录；captcha-data/labeled/ 才是数据集本体
+captcha-data/review/

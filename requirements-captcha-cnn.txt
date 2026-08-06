@@ -1,0 +1,7 @@
+# Separate Python 3.11 environment; do not install into the crawler venv.
+tensorflow==2.15.1
+numpy==1.26.4
+Pillow==10.4.0
+
+# 仅 scripts/label_npedi_captcha.py 抓图标注时需要
+httpx>=0.27

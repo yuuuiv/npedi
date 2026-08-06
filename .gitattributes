@@ -1,0 +1,8 @@
+# Shell 脚本必须是 LF：带 CRLF 签出到 Linux 上会报 `\r: command not found`
+*.sh text eol=lf
+
+# PowerShell 只在 Windows 上跑，保持 CRLF
+*.ps1 text eol=crlf
+
+*.py text eol=lf
+*.md text eol=lf

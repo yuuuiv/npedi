@@ -1,0 +1,14 @@
+{
+  "image_height": 36,
+  "image_width": 111,
+  "fixed_length": 4,
+  "labels": "123456789ABCDEFGHJKLMNPQRSTUVWXY",
+  "model_weights": "../captcha-model/npedi.weights.h5",
+  "labeled_image_dir": "../captcha-data/labeled",
+  "batch_size": 128,
+  "learning_rate": 0.001,
+  "dropout_rate": 0.10,
+  "epochs": 100,
+  "validation_fraction": 0.2,
+  "random_seed": 20260805
+}
