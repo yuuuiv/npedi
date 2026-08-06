@@ -75,7 +75,7 @@ python3.11 -m venv .captcha-cnn-venv
 ```
 
 流程：脚本从 `https://www.npedi.com/onesite-api/captchaImage` 取一张图 → 存到
-`captcha-data/review/<uuid>.jpg` → Windows 上自动用默认看图程序弹出来 → 你在终端敲答案。
+`captcha-data/review/<uuid>.jpg` → 弹出一个 tkinter 预览窗口（同一窗口内更新）→ 你在终端敲答案。
 
 终端提示 `Label (4 uppercase letters/digits), s=skip, q=quit:`：
 

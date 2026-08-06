@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import argparse
 import base64
-import os
 import re
 import time
+import tkinter as tk
 from pathlib import Path
 
 import httpx
+from PIL import Image, ImageTk
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,11 @@ def main() -> int:
     review_dir.mkdir(parents=True, exist_ok=True)
     labeled_dir.mkdir(parents=True, exist_ok=True)
 
+    root = tk.Tk()
+    root.title("CAPTCHA review")
+    preview = tk.Label(root)
+    preview.pack()
+
     with httpx.Client(base_url=args.base_url.rstrip("/") + "/onesite-api", timeout=30) as client:
         for index in range(args.count):
             response = client.get("/captchaImage")
@@ -42,12 +48,16 @@ def main() -> int:
             uuid = re.sub(r"[^A-Za-z0-9-]", "", str(data["uuid"]))
             preview_path = review_dir / f"{uuid}.jpg"
             preview_path.write_bytes(image)
-            if os.name == "nt":
-                os.startfile(preview_path)  # type: ignore[attr-defined]
+            with Image.open(preview_path) as image_file:
+                photo = ImageTk.PhotoImage(image_file.resize((333, 108), Image.NEAREST))
+            preview.configure(image=photo)
+            preview.image = photo
+            root.update()
             print(f"[{index + 1}/{args.count}] Review {preview_path}")
             while True:
                 answer = input("Label (4 uppercase letters/digits), s=skip, q=quit: ").strip().upper()
                 if answer == "Q":
+                    root.destroy()
                     return 0
                 if answer == "S":
                     break
@@ -59,6 +69,7 @@ def main() -> int:
                 print("Invalid label; expected exactly four A-Z/0-9 characters.")
             if index + 1 < args.count:
                 time.sleep(delay)
+    root.destroy()
     return 0
 
 
