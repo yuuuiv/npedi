@@ -22,7 +22,11 @@ EDI*.html
 __pycache__/
 *.pyc
 .captcha-cnn-venv/
+.demo-venv/
 captcha-data/
 captcha-model/
+
+# 演示录制的中间产物：原始录像、抽出的帧、Chrome 临时配置
+scripts/demo/record/
 
 .claude/
