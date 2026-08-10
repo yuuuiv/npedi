@@ -148,7 +148,12 @@ class NpediClient:
             if resp.status_code == 429 or resp.status_code >= 500:
                 if attempt > self.cfg.max_retries:
                     raise ApiError(f"{path} 返回 HTTP {resp.status_code}，重试后仍失败")
-                time.sleep(3 ** (attempt - 1))
+                backoff = 3 ** (attempt - 1)
+                # Log the retry: a silently retried 429 is exactly the signal
+                # that the request rate is too high, and it never reached
+                # ingest_error unless every retry was exhausted.
+                log.warning("%s 返回 HTTP %d，%ss 后重试 %d/%d", path, resp.status_code, backoff, attempt, self.cfg.max_retries)
+                time.sleep(backoff)
                 continue
             if resp.status_code != 200:
                 raise ApiError(f"{path} 返回 HTTP {resp.status_code}: {resp.text[:200]}")
@@ -217,7 +222,12 @@ class NpediClient:
             if resp.status_code == 429 or resp.status_code >= 500:
                 if attempt > self.cfg.max_retries:
                     raise ApiError(f"{path} 返回 HTTP {resp.status_code}，重试后仍失败")
-                time.sleep(3 ** (attempt - 1))
+                backoff = 3 ** (attempt - 1)
+                # Log the retry: a silently retried 429 is exactly the signal
+                # that the request rate is too high, and it never reached
+                # ingest_error unless every retry was exhausted.
+                log.warning("%s 返回 HTTP %d，%ss 后重试 %d/%d", path, resp.status_code, backoff, attempt, self.cfg.max_retries)
+                time.sleep(backoff)
                 continue
             if resp.status_code != 200:
                 raise ApiError(f"{path} 返回 HTTP {resp.status_code}: {resp.text[:200]}")
