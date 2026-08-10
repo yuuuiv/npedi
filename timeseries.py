@@ -1,4 +1,4 @@
-"""Bronze/Phase-1 crawler framework for the documented timeseries endpoints."""
+﻿"""Bronze/Phase-1 crawler framework for the documented timeseries endpoints."""
 from __future__ import annotations
 
 import hashlib
@@ -82,9 +82,43 @@ class TimeseriesStore:
         self.conn = sqlite3.connect(self.path, timeout=60.0)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        # WAL + NORMAL drops an fsync from every commit. It can lose the last
+        # transactions on an OS or power failure, never on a process crash, and
+        # an interrupted enrichment batch is re-done from the pending queue.
+        self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
+        # Writes are grouped instead of committed one row at a time; see
+        # commit()/flush(). Deferral is opt-in so one-off scripts keep the old
+        # commit-immediately behaviour.
+        self._defer_commits = False
         self.apply_migrations(migration_dir)
         self._bootstrap_fact_versions()
+
+    def defer_commits(self, enabled: bool) -> None:
+        """Hold row-level commits so a caller can group them.
+
+        Enrichment used to commit about 26 times per container (once per fact
+        row, per schema observation, per checkpoint), so a 500-container batch
+        issued ~13k transactions and several workers together turned the write
+        lock into the bottleneck — 60s busy timeouts and dying workers.
+
+        The caller is responsible for calling flush() at a boundary that does
+        not span a network wait. Grouping across fetches would keep the write
+        lock held for seconds at a time, which is worse than the original.
+        """
+        if not enabled:
+            self.flush()
+        self._defer_commits = enabled
+
+    def commit(self) -> None:
+        """Commit unless the caller is grouping writes."""
+        if not self._defer_commits:
+            self.conn.commit()
+
+    def flush(self) -> None:
+        """Commit whatever is pending, regardless of deferral."""
+        if self.conn.in_transaction:
+            self.conn.commit()
 
     def apply_migrations(self, migration_dir: Path) -> None:
         self.conn.execute("CREATE TABLE IF NOT EXISTS schema_migration (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
@@ -96,6 +130,8 @@ class TimeseriesStore:
         self.conn.commit()
 
     def close(self) -> None:
+        # Deferred writes would otherwise be rolled back when the handle closes.
+        self.flush()
         self.conn.close()
 
     def _bootstrap_fact_versions(self) -> None:
@@ -164,12 +200,12 @@ class TimeseriesStore:
         ts = now_utc()
         self.conn.execute("""INSERT INTO crawl_checkpoint(job_name,partition_key,next_page,observed_total,last_success_at,cursor_json,updated_at) VALUES(?,?,?,?,?,?,?)
         ON CONFLICT(job_name,partition_key) DO UPDATE SET next_page=excluded.next_page,observed_total=excluded.observed_total,last_success_at=excluded.last_success_at,cursor_json=excluded.cursor_json,updated_at=excluded.updated_at""", (job, partition, next_page, total, ts, "{}", ts))
-        self.conn.commit()
+        self.commit()
 
     def raw_page(self, run_id: str, endpoint: str, request: RequestSpec, page: int, response: dict[str, Any]) -> bool:
         raw = stable(response)
         cur = self.conn.execute("""INSERT OR IGNORE INTO raw_api_response(crawl_run_id,endpoint_name,request_fingerprint,page_num,business_partition,response_code,response_msg,http_status,payload_hash,raw_json,fetched_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)""", (run_id, endpoint, digest(stable({"endpoint": endpoint, "filters": request.filters})), page, request.partition_key, response.get("code"), response.get("msg"), 200, digest(raw), raw, now_utc()))
-        self.conn.commit()
+        self.commit()
         return cur.rowcount == 1
 
     def error(self, run_id: str, endpoint: str, stage: str, message: str, request: dict[str, Any] | None = None, row: dict[str, Any] | None = None) -> None:
@@ -181,7 +217,7 @@ class TimeseriesStore:
         for key, value in row.items():
             self.conn.execute("""INSERT INTO schema_observation(endpoint_name,field_name,first_seen_at,last_seen_at,sample_type) VALUES(?,?,?,?,?)
             ON CONFLICT(endpoint_name,field_name) DO UPDATE SET last_seen_at=excluded.last_seen_at""", (endpoint, key, ts, ts, type(value).__name__))
-        self.conn.commit()
+        self.commit()
 
     def upsert_bronze(self, endpoint: str, key: str, row: dict[str, Any], event_time: str | None, source_update_time: str | None) -> tuple[bool, bool]:
         raw = stable(row)
@@ -192,7 +228,7 @@ class TimeseriesStore:
             return False, False
         self.conn.execute("""INSERT INTO bronze_record(endpoint_name,business_key_hash,record_hash,event_time,source_update_time,ingested_at,raw_json) VALUES(?,?,?,?,?,?,?)
         ON CONFLICT(endpoint_name,business_key_hash) DO UPDATE SET record_hash=excluded.record_hash,event_time=excluded.event_time,source_update_time=excluded.source_update_time,ingested_at=excluded.ingested_at,raw_json=excluded.raw_json""", (endpoint, key_hash, record_hash, event_time, source_update_time, now_utc(), raw))
-        self.conn.commit()
+        self.commit()
         return old is None, old is not None
 
     def insert_plan(self, row: dict[str, Any]) -> tuple[bool, bool]:
@@ -200,7 +236,7 @@ class TimeseriesStore:
         old = self.conn.execute("SELECT 1 FROM silver_vessel_plan WHERE business_key_hash=? AND snapshot_time=?", (row["business_key_hash"], row["snapshot_time"])).fetchone()
         sql = "INSERT OR REPLACE INTO silver_vessel_plan(" + ",".join(fields) + ") VALUES(" + ",".join("?" for _ in fields) + ")"
         self.conn.execute(sql, tuple(row.get(field) for field in fields))
-        self.conn.commit()
+        self.commit()
         return old is None, old is not None
 
     def upsert_dimensions(self, row: dict[str, Any]) -> None:
@@ -212,7 +248,7 @@ class TimeseriesStore:
         if terminal_code:
             self.conn.execute("""INSERT INTO dim_terminal(terminal_code,terminal_name,first_seen_at,last_seen_at,raw_json) VALUES(?,?,?,?,?)
             ON CONFLICT(terminal_code) DO UPDATE SET last_seen_at=excluded.last_seen_at""", (terminal_code, None, ts, ts, row.get("raw_json", "{}")))
-        self.conn.commit()
+        self.commit()
     def upsert_fact(self, table: str, row: dict[str, Any], fields: tuple[str, ...]) -> tuple[bool, bool]:
         allowed = {"fact_vessel_plan_snapshot", "fact_container_vgm", "fact_cargo_release", "fact_transshipment", "fact_container_event"}
         if table not in allowed:
@@ -231,14 +267,14 @@ class TimeseriesStore:
                 VALUES(?,?,?,?,?,?,?)""", (table, row["business_key_hash"], observed_at, event_time, record_hash, stable(normalized), row.get("raw_json") or ""))
         sql = "INSERT OR REPLACE INTO " + table + "(" + ",".join(fields) + ") VALUES(" + ",".join("?" for _ in fields) + ")"
         self.conn.execute(sql, tuple(row.get(field) for field in fields))
-        self.conn.commit()
+        self.commit()
         return old is None, old is not None
     def insert_notice(self, row: dict[str, Any]) -> tuple[bool, bool]:
         fields = ("business_key_hash","vessel_code","vessel_en_name","voyage","terminal_code","direction","ctn_start_time","ctn_end_time","ports_raw","vessel_operator","source_update_time","ingested_at","record_hash","quality_json","raw_json")
         old = self.conn.execute("SELECT 1 FROM silver_container_notice WHERE business_key_hash=? AND ingested_at=?", (row["business_key_hash"], row["ingested_at"])).fetchone()
         sql = "INSERT OR REPLACE INTO silver_container_notice(" + ",".join(fields) + ") VALUES(" + ",".join("?" for _ in fields) + ")"
         self.conn.execute(sql, tuple(row.get(field) for field in fields))
-        self.conn.commit()
+        self.commit()
         return old is None, old is not None
 
 
@@ -312,6 +348,7 @@ class BaseCrawler:
         run_id = self.store.start_run(self.endpoint_name, self.endpoint_name, self.mode, context)
         stats = {"requests": 0, "raw": 0, "seen": 0, "inserted": 0, "updated": 0, "errors": 0}
         abort_reason: str | None = None
+        self.store.defer_commits(True)
         try:
             for request in self.build_requests(context):
                 errors_before_request = stats["errors"]
@@ -372,6 +409,9 @@ class BaseCrawler:
                         stats["inserted"] += int(new)
                         stats["updated"] += int(updated)
                     self.store.save_checkpoint(self.endpoint_name, request.partition_key, page + 1, total)
+                    # Multi-page partitions (gate backfill) would otherwise keep
+                    # one transaction open across every page fetch.
+                    self.store.flush()
                     if not rows or (total is not None and page * request.page_size >= total) or len(rows) < request.page_size:
                         request_complete = True
                         break
@@ -383,6 +423,11 @@ class BaseCrawler:
                     self.on_request_success(request)
                 else:
                     self.on_request_failure(request)
+                # Close the transaction at the request boundary, before the next
+                # fetch. This is the whole point of the grouping: one commit per
+                # container instead of ~26, without ever holding the write lock
+                # across a network wait.
+                self.store.flush()
                 if abort_reason:
                     break
             status = "partial" if stats["errors"] else "success"
@@ -397,6 +442,8 @@ class BaseCrawler:
             self.store.error(run_id, self.endpoint_name, "crawl", str(exc))
             self.store.finish_run(run_id, "failed", stats, str(exc))
             raise
+        finally:
+            self.store.defer_commits(False)
 
 
 class VesselPlanCrawler(BaseCrawler):

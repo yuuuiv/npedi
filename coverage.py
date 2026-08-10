@@ -249,7 +249,9 @@ def mark_enrichment(
             WHERE container_no=?""",
         ("complete" if success else "error", now_utc(), None if success else (error or "request failed"), number),
     )
-    store.conn.commit()
+    # Grouped with the rest of this container's writes; claim/release still
+    # commit immediately because other workers must see them at once.
+    store.commit()
 
 
 def coverage_status(store: TimeseriesStore) -> dict[str, Any]:

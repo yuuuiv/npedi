@@ -1,4 +1,4 @@
-"""Phase 2 crawlers for VGM, bulk release, transshipment and history enrichment."""
+﻿"""Phase 2 crawlers for VGM, bulk release, transshipment and history enrichment."""
 from __future__ import annotations
 
 from typing import Any, Iterable
@@ -24,7 +24,7 @@ class FactCrawler(BaseCrawler):
             ensure_container_state(self.store, container_no, source=self.endpoint_name)
             self.store.conn.execute("""INSERT INTO container_enrichment_queue(container_no,priority,source,first_seen_at,status) VALUES(?,?,?,?,?)
             ON CONFLICT(container_no) DO UPDATE SET source=excluded.source""", (container_no, 0, self.endpoint_name, now_utc(), "pending"))
-            self.store.conn.commit()
+            self.store.commit()
         return result
 
 
@@ -169,7 +169,7 @@ class ContainerHistoryCrawler(FactCrawler):
                WHERE container_no=?""",
             (now_utc(), request.filters["container_no"]),
         )
-        self.store.conn.commit()
+        self.store.commit()
 
     def on_request_failure(self, request: RequestSpec) -> None:
         mark_enrichment(
@@ -184,4 +184,4 @@ class ContainerHistoryCrawler(FactCrawler):
                WHERE container_no=?""",
             (now_utc(), request.filters["container_no"]),
         )
-        self.store.conn.commit()
+        self.store.commit()
