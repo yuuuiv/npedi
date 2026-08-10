@@ -36,7 +36,15 @@ def main() -> int:
     parser.add_argument("--workers", type=int, default=2, choices=range(1, 5), metavar="1-4")
     parser.add_argument("--batch-size", type=int, default=500, choices=range(1, 2001), metavar="1-2000")
     parser.add_argument("--max-batches-per-worker", type=int, default=0)
+    parser.add_argument(
+        "--max-consecutive-failures",
+        type=int,
+        default=5,
+        help="stop the whole group only after this many failed batches in a row",
+    )
     args = parser.parse_args()
+    if args.max_consecutive_failures < 1:
+        parser.error("--max-consecutive-failures must be at least 1")
     if not PYTHON.is_file():
         parser.error(f"missing crawler interpreter: {PYTHON}")
 
@@ -49,6 +57,7 @@ def main() -> int:
 
     def worker(index: int) -> int:
         batches = 0
+        consecutive = 0
         claim_id = f"{args.target}-{index}-{uuid.uuid4().hex}"
         while not stop.is_set():
             if args.max_batches_per_worker and batches >= args.max_batches_per_worker:
@@ -58,15 +67,51 @@ def main() -> int:
                 "--limit", str(args.batch_size), "--offset", "0", "--resume",
                 "--claim-id", claim_id,
             ]
-            result = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
+            # Decode the child as UTF-8 explicitly: text=True picks the locale
+            # codec, and on a Chinese Windows console that is GBK, which raises
+            # UnicodeDecodeError on any byte the child emits outside it.
+            result = subprocess.run(
+                command, cwd=PROJECT_ROOT, capture_output=True, check=False,
+                text=True, encoding="utf-8", errors="replace",
+            )
+
+            payload: dict = {}
+            problem = None
             if result.returncode != 0:
-                stop.set()
                 detail = (result.stderr or result.stdout).strip().splitlines()[-1:]
-                raise RuntimeError(f"worker {index} exited {result.returncode}: {' '.join(detail)}")
-            payload = _last_json(result.stdout)
-            if payload.get("status") != "success":
-                stop.set()
-                raise RuntimeError(f"worker {index} crawl status={payload.get('status')}")
+                problem = f"exit {result.returncode}: {' '.join(detail)}"
+            else:
+                try:
+                    payload = _last_json(result.stdout)
+                except RuntimeError as exc:
+                    problem = str(exc)
+                else:
+                    if payload.get("status") != "success":
+                        problem = f"crawl status={payload.get('status')}"
+
+            if problem:
+                # A failed batch releases its claims, so those containers stay
+                # pending and the next batch picks them up. Killing the group on
+                # the first one let a single bad batch silently halve throughput
+                # for hours; only a sustained run means it is really stuck.
+                consecutive += 1
+                print(
+                    f"worker={index} batch failed "
+                    f"({consecutive}/{args.max_consecutive_failures}): {problem}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                if consecutive >= args.max_consecutive_failures:
+                    stop.set()
+                    raise RuntimeError(
+                        f"worker {index} stopped after {consecutive} consecutive "
+                        f"failed batches; last: {problem}"
+                    )
+                if stop.wait(min(60.0, 10.0 * consecutive)):
+                    return batches
+                continue
+
+            consecutive = 0
             claimed = int(payload.get("claimed") or 0)
             if claimed == 0:
                 return batches
