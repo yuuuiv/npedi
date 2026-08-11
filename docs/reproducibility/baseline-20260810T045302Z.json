@@ -1,0 +1,159 @@
+{
+  "generated_at": "2026-08-10T04:52:44.898823+00:00",
+  "mode": "fast",
+  "db": "C:\\Users\\admin\\Desktop\\npedi\\npedi.sqlite",
+  "cutoffs": {
+    "2026-08-10T04:52:44.898728+00:00": {
+      "version:fact_container_vgm": {
+        "rows": 3168725,
+        "min_id": 286,
+        "max_id": 14868905,
+        "sum_id": 27467041238706
+      },
+      "version:fact_cargo_release": {
+        "rows": 108422,
+        "min_id": 1559,
+        "max_id": 109980,
+        "sum_id": 6046640729
+      },
+      "version:fact_transshipment": {
+        "rows": 57,
+        "min_id": 1,
+        "max_id": 57,
+        "sum_id": 1653
+      },
+      "version:fact_container_event": {
+        "rows": 10286992,
+        "min_id": 327205,
+        "max_id": 14868908,
+        "sum_id": 82071822390481
+      },
+      "plan:fact_vessel_plan_snapshot": {
+        "rows": 1366007,
+        "min_id": 1,
+        "max_id": 1366007,
+        "sum_id": 932988245028
+      },
+      "gate:gate_events": {
+        "rows": 3659747,
+        "min_id": "20210416111922302095550",
+        "max_id": "20260730131939959315203",
+        "sum_id": 1836066846569324
+      }
+    },
+    "2026-08-09T23:59:59.999999+00:00": {
+      "version:fact_container_vgm": {
+        "rows": 2955516,
+        "min_id": 286,
+        "max_id": 14151478,
+        "sum_id": 24386651263355
+      },
+      "version:fact_cargo_release": {
+        "rows": 108422,
+        "min_id": 1559,
+        "max_id": 109980,
+        "sum_id": 6046640729
+      },
+      "version:fact_transshipment": {
+        "rows": 57,
+        "min_id": 1,
+        "max_id": 57,
+        "sum_id": 1653
+      },
+      "version:fact_container_event": {
+        "rows": 9782771,
+        "min_id": 327205,
+        "max_id": 14151468,
+        "sum_id": 74742164243127
+      },
+      "plan:fact_vessel_plan_snapshot": {
+        "rows": 1366007,
+        "min_id": 1,
+        "max_id": 1366007,
+        "sum_id": 932988245028
+      },
+      "gate:gate_events": {
+        "rows": 3659747,
+        "min_id": "20210416111922302095550",
+        "max_id": "20260730131939959315203",
+        "sum_id": 1836066846569324
+      }
+    },
+    "2026-08-08T23:59:59.999999+00:00": {
+      "version:fact_container_vgm": {
+        "rows": 2080621,
+        "min_id": 286,
+        "max_id": 11249158,
+        "sum_id": 13083027012583
+      },
+      "version:fact_cargo_release": {
+        "rows": 108422,
+        "min_id": 1559,
+        "max_id": 109980,
+        "sum_id": 6046640729
+      },
+      "version:fact_transshipment": {
+        "rows": 57,
+        "min_id": 1,
+        "max_id": 57,
+        "sum_id": 1653
+      },
+      "version:fact_container_event": {
+        "rows": 7755346,
+        "min_id": 327205,
+        "max_id": 11249146,
+        "sum_id": 49185400104979
+      },
+      "plan:fact_vessel_plan_snapshot": {
+        "rows": 1366007,
+        "min_id": 1,
+        "max_id": 1366007,
+        "sum_id": 932988245028
+      },
+      "gate:gate_events": {
+        "rows": 3659747,
+        "min_id": "20210416111922302095550",
+        "max_id": "20260730131939959315203",
+        "sum_id": 1836066846569324
+      }
+    },
+    "2026-08-07T23:59:59.999999+00:00": {
+      "version:fact_container_vgm": {
+        "rows": 1257611,
+        "min_id": 286,
+        "max_id": 7312200,
+        "sum_id": 5457182495586
+      },
+      "version:fact_cargo_release": {
+        "rows": 108422,
+        "min_id": 1559,
+        "max_id": 109980,
+        "sum_id": 6046640729
+      },
+      "version:fact_transshipment": {
+        "rows": 57,
+        "min_id": 1,
+        "max_id": 57,
+        "sum_id": 1653
+      },
+      "version:fact_container_event": {
+        "rows": 4641402,
+        "min_id": 327205,
+        "max_id": 7312204,
+        "sum_id": 20273628467825
+      },
+      "plan:fact_vessel_plan_snapshot": {
+        "rows": 1366007,
+        "min_id": 1,
+        "max_id": 1366007,
+        "sum_id": 932988245028
+      },
+      "gate:gate_events": {
+        "rows": 3659747,
+        "min_id": "20210416111922302095550",
+        "max_id": "20260730131939959315203",
+        "sum_id": 1836066846569324
+      }
+    }
+  }
+}
