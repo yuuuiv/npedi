@@ -90,8 +90,23 @@ def render_curves(
         (bucket, value / 1000.0)
         for bucket, value in _aggregate(rows, "cargo_release", sum)
     ]
-    gate_in = _aggregate(rows, "gate_in_teu", sum)
-    gate_out = _aggregate(rows, "gate_out_teu", sum)
+    observed_gate_in = _aggregate(rows, "gate_in_teu", sum)
+    observed_gate_out = _aggregate(rows, "gate_out_teu", sum)
+    # Historical CODECO coverage is currently known to be directory-biased.
+    # Keep the misleading cross-period line hidden until a separate coverage
+    # audit explicitly marks it comparable; raw aggregates remain in the DB.
+    gate_history_validated = False
+    if store.conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'"
+    ).fetchone():
+        flag = store.conn.execute(
+            "SELECT value FROM meta WHERE key='gate_history_coverage_validated'"
+        ).fetchone()
+        gate_history_validated = bool(flag and str(flag[0]).strip().lower() in {
+            "1", "true", "yes", "on",
+        })
+    gate_in = observed_gate_in if gate_history_validated else []
+    gate_out = observed_gate_out if gate_history_validated else []
     vgm_count = _aggregate(rows, "container_vgm_count", sum)
     transshipment_count = _aggregate(rows, "transshipment_container_count", sum)
     arrival = _aggregate(
@@ -128,10 +143,13 @@ def render_curves(
             line={"color": "#f59e0b", "width": 2},
         ),
     ]
-    gate_traces = [
-        _trace(gate_in, LABELS["gate_in_teu"], line={"color": "#0891b2", "width": 2}),
-        _trace(gate_out, LABELS["gate_out_teu"], line={"color": "#ea580c", "width": 2}),
-    ]
+    gate_traces = (
+        [
+            _trace(gate_in, LABELS["gate_in_teu"], line={"color": "#0891b2", "width": 2}),
+            _trace(gate_out, LABELS["gate_out_teu"], line={"color": "#ea580c", "width": 2}),
+        ]
+        if gate_history_validated else []
+    )
     cargo_traces = [
         _trace(cargo_weight_tonnes, LABELS["cargo_release"], line={"color": "#16a34a", "width": 2}),
     ]
@@ -186,6 +204,8 @@ def render_curves(
                 float(gate_quality[3] or 0) / float(gate_quality[2])
                 if gate_quality[2] else 0.0
             ),
+            "gate_history_validated": gate_history_validated,
+            "gate_observed_points": len(observed_gate_in) + len(observed_gate_out),
         },
     }
     cards = {
@@ -231,13 +251,13 @@ h1{margin:0 0 6px;font-size:28px}h2{font-size:18px;margin:0 0 12px}.muted{color:
  <li>默认只展示最近 156 周，已排除公元 1015、3023、4012 等明显脏日期。</li>
  <li>延误超过 30 天的 ETA/ATA 或 ETD/ATD 配对不进入图表。</li>
  <li>闸口图只代表 NPEDI 的船×航次 CODECO 接口覆盖，不是官方“全港吞吐量”。当前目录 <span id="coverage-catalog"></span> 个箱号、<span id="coverage-gate"></span> 条源记录。</li>
- <li>历史覆盖明显不均匀：2025-05 至 2026-05 航次记录稀疏，不能把该段低值解释为港口业务下降。TEU 箱型识别覆盖率为 <span id="coverage-teu"></span>。</li>
+ <li>计划事实表 2023-01 至 2026-07 有 292,871 个船×航次，原始快照目录只命中 9,476 个；历史补爬和覆盖验收完成前暂停展示闸口跨期曲线，绝不能把旧月份低值或 2026-07 突增解释为业务变化。TEU 箱型识别覆盖率为 <span id="coverage-teu"></span>。</li>
  <li>VGM 与单箱 API 轨迹是独立远程增强：已查询 <span id="coverage-vgm"></span> / <span id="coverage-history"></span> 个箱号；未完成前不外推全港重量。</li>
  <li>cargo-release 主业务量仍使用提单数。独立货重图按 <code>cargo-weight-kg-v1</code> 将原值核验为 kg 后换算成吨，原值和规则版本均保留。</li>
 </ul></div>
 <div class="grid">
  <section class="panel wide"><h2>业务量趋势</h2><div class="muted">计划靠港船次与放行提单分属左右坐标轴</div><div id="traffic" class="chart"></div></section>
- <section class="panel wide"><h2>CODECO 接口覆盖闸口流量</h2><div class="muted">单位：TEU；严格按 GATE_IN/GATE_OUT 报文类型计数，同日同方向同箱去重。用于观察已采集覆盖，不等同官方全港统计。</div><div id="gate" class="chart"></div></section>
+ <section class="panel wide"><h2>CODECO 闸口历史趋势（覆盖验收后开放）</h2><div class="muted">原始聚合仍保留；当前历史候选尚在单 worker 补爬，为防止目录覆盖差异被误读成吞吐趋势，暂不绘制跨期折线。</div><div id="gate" class="chart"></div></section>
  <section class="panel"><h2>到离港延误</h2><div id="delays" class="chart"></div></section>
  <section class="panel"><h2>放行货重</h2><div class="muted">单位：吨；独立于主图提单数，规则 cargo-weight-kg-v1</div><div id="cargo" class="chart"></div></section>
  <section class="panel"><h2>远程增强样本</h2><div class="muted">VGM 未全量完成前仅展示实际查询结果，不外推全港</div><div id="samples" class="chart"></div></section>
@@ -256,7 +276,9 @@ document.getElementById('coverage-vgm').textContent=`${data.metadata.coverage.vg
 document.getElementById('coverage-history').textContent=`${data.metadata.coverage.history_api_queried.toLocaleString()} / ${data.metadata.coverage.catalog_containers.toLocaleString()}`;
 const base={paper_bgcolor:'white',plot_bgcolor:'white',margin:{l:58,r:35,t:25,b:45},hovermode:'x unified',legend:{orientation:'h',y:1.12},xaxis:{gridcolor:'#eef2f7'},yaxis:{gridcolor:'#eef2f7',rangemode:'tozero'}};
 Plotly.newPlot('traffic',data.traffic,{...base,yaxis:{...base.yaxis,title:'船次'},yaxis2:{title:'提单数',overlaying:'y',side:'right',rangemode:'tozero'}},cfg);
-Plotly.newPlot('gate',data.gate,{...base,yaxis:{...base.yaxis,title:'TEU'}},cfg);
+const gateLayout={...base,yaxis:{...base.yaxis,title:'TEU'}};
+if(!data.metadata.coverage.gate_history_validated){gateLayout.annotations=[{text:'历史覆盖尚未验收，曲线暂不展示',xref:'paper',yref:'paper',x:.5,y:.5,showarrow:false,font:{size:18,color:'#b45309'}}]}
+Plotly.newPlot('gate',data.gate,gateLayout,cfg);
 Plotly.newPlot('delays',data.delays,{...base,yaxis:{...base.yaxis,title:'小时'}},cfg);
 Plotly.newPlot('cargo',data.cargo,{...base,yaxis:{...base.yaxis,title:'吨'}},cfg);
 Plotly.newPlot('samples',data.samples,{...base,yaxis:{...base.yaxis,title:'箱数'}},cfg);

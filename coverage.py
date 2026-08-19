@@ -68,8 +68,12 @@ def seed_container_catalog(store: TimeseriesStore) -> dict[str, int]:
                            THEN 'pending' ELSE 'invalid' END,
                       CASE WHEN iso6346_valid(UPPER(TRIM(ctnNo)))=1
                            THEN 'pending' ELSE 'invalid' END
-               FROM gate_events
+               FROM gate_events AS e
                WHERE ctnNo IS NOT NULL AND TRIM(ctnNo)<>''
+                 AND NOT EXISTS (
+                     SELECT 1 FROM gate_history_rejected_pair AS r
+                     WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage
+                 )
                GROUP BY UPPER(TRIM(ctnNo))
                ON CONFLICT(container_no) DO UPDATE SET
                    source=CASE WHEN instr(container_enrichment_state.source,'gate_events')>0
@@ -275,8 +279,12 @@ def coverage_status(store: TimeseriesStore) -> dict[str, Any]:
             """SELECT COUNT(*), COUNT(DISTINCT UPPER(TRIM(ctnNo))),
                       SUM(inGateTime IS NOT NULL AND TRIM(inGateTime)<>''),
                       SUM(outGateTime IS NOT NULL AND TRIM(outGateTime)<>'')
-               FROM gate_events
-               WHERE ctnNo IS NOT NULL AND TRIM(ctnNo)<>''"""
+               FROM gate_events AS e
+               WHERE ctnNo IS NOT NULL AND TRIM(ctnNo)<>''
+                 AND NOT EXISTS (
+                     SELECT 1 FROM gate_history_rejected_pair AS r
+                     WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage
+                 )"""
         ).fetchone()
     return {
         "catalog": {"total": int(total), "iso6346_valid": int(valid), "invalid": int(total - valid)},

@@ -18,3 +18,7 @@
 | Gold | `change_point_event/anomaly_event/trend_snapshot` | 变点、异常、趋势状态 |
 
 非法数值和解析失败写 NULL；原始值留在 `raw_json`，不强制转成 0 或当前时间。
+
+进出门（CODECO）管线的 `gate_events` / `gate_voyages` 不属于上述分层，
+逐字段说明、取值分布与数据质量陷阱见
+[gate-events-fields.md](gate-events-fields.md)。

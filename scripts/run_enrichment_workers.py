@@ -33,7 +33,7 @@ def _last_json(stdout: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("target", choices=("vgm", "history"))
-    parser.add_argument("--workers", type=int, default=2, choices=range(1, 5), metavar="1-4")
+    parser.add_argument("--workers", type=int, default=1, choices=range(1, 5), metavar="1-4")
     parser.add_argument("--batch-size", type=int, default=500, choices=range(1, 2001), metavar="1-2000")
     parser.add_argument("--max-batches-per-worker", type=int, default=0)
     parser.add_argument(

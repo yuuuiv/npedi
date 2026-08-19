@@ -79,7 +79,7 @@ class ContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with TimeseriesStore(Path(tmp) / "empty.sqlite") as store:
                 tables = {row[0] for row in store.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                for name in ("crawl_run", "crawl_checkpoint", "raw_api_response", "ingest_error", "fact_container_vgm", "agg_flow_daily", "mart_curve_series", "cluster_run"):
+                for name in ("crawl_run", "crawl_checkpoint", "raw_api_response", "ingest_error", "fact_container_vgm", "agg_flow_daily", "mart_curve_series", "cluster_run", "gate_history_candidate", "gate_history_candidate_month", "gate_history_seed_scope"):
                     self.assertIn(name, tables)
 
 

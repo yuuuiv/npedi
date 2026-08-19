@@ -12,6 +12,8 @@
 进出门（CODECO）管线，见 ARCHITECTURE-GATE.md：
 
     python sync.py gate-backfill --max-requests 5000   # 历史回填，按预算分次跑
+    python sync.py gate-history-backfill --eta-start 2026-05-01 --eta-end 2026-06-30
+                                                     # 目录外历史候选，支持 1–4 workers 小批续跑
     python sync.py gate-incremental                    # 增量（每日一次）
     python sync.py gate-gap                            # 导出 npp 缺失的箱子清单
     python sync.py gate-status                         # 进出门库状态
@@ -51,6 +53,11 @@ META_BACKFILL_PAGE = "backfill_page_done"
 META_TOKEN_HASH = "token_hash"
 META_TOKEN_FIRST_USED = "token_first_used_at"
 META_TOKEN_PREV_DAYS = "token_prev_lifetime_days"
+
+
+def token_fingerprint(token: str) -> str:
+    """One-way token identifier used by the lifetime audit tables."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 # --------------------------------------------------------------------- 基础设施
@@ -106,7 +113,7 @@ class FileLock:
 # 会真正联网采集的子命令：只有这些才单独开一个轮次日志
 COLLECTING_COMMANDS = (
     "probe", "backfill", "incremental", "reconcile", "replay",
-    "gate-backfill", "gate-incremental",
+    "gate-backfill", "gate-history-backfill", "gate-incremental",
 )
 
 
@@ -179,7 +186,7 @@ def clear_alert(cfg: Config) -> None:
 
 def track_token(store: Store, cfg: Config, now: datetime) -> None:
     """token 换新时记下启用时间，并结算上一个 token 的寿命（天）。"""
-    digest = hashlib.sha256(cfg.token.encode("utf-8")).hexdigest()[:16]
+    digest = token_fingerprint(cfg.token)[:16]
     if store.meta_get(META_TOKEN_HASH) == digest:
         return
     first = store.meta_get(META_TOKEN_FIRST_USED)
@@ -218,13 +225,108 @@ def warn_token_age(store: Store, now: datetime) -> None:
         )
 
 
-def preflight(cfg: Config, client: NpediClient, store: Store, now: datetime) -> None:
-    """每轮开始的公共前置：token 计龄 + 探活。探活失败会在采集开始前就报出失效。"""
+def preflight(
+    cfg: Config,
+    client: NpediClient,
+    store: Store,
+    now: datetime,
+    *,
+    run_id: int | None = None,
+    run_kind: str = "",
+) -> str:
+    """Track the active token and persist a successful authenticated probe."""
+    fingerprint = token_fingerprint(cfg.token)
+    initial_fingerprint = fingerprint
+    observed_at = now.strftime("%Y-%m-%d %H:%M:%S")
+    # Backfill the first observation from the legacy tracker when both refer
+    # to the same token.  This preserves evidence collected before the richer
+    # observation tables were introduced.
+    if store.meta_get(META_TOKEN_HASH) == fingerprint[:16]:
+        legacy_first = store.meta_get(META_TOKEN_FIRST_USED)
+        if legacy_first:
+            observed_at = legacy_first
+    store.observe_token_seen(fingerprint, observed_at)
     track_token(store, cfg, now)
     warn_token_age(store, now)
     if cfg.auth_probe:
-        client.get_info()
+        try:
+            client.get_info()
+        except AuthExpired:
+            store.observe_token_auth_failure(
+                fingerprint,
+                run_id=run_id,
+                run_kind=run_kind,
+                endpoint="/getInfo",
+            )
+            raise
+        # AUTO_LOGIN may have replaced cfg.token while retrying getInfo.  The
+        # successful observation must belong to the token that actually won.
+        fingerprint = token_fingerprint(cfg.token)
+        # Keep the legacy tracker aligned as well.  Without this second call,
+        # an automatic refresh during getInfo would leave META_TOKEN_HASH on
+        # the expired token until the next process starts.
+        track_token(store, cfg, datetime.now())
+        store.observe_token_seen(fingerprint)
+        if fingerprint != initial_fingerprint:
+            # A changed token during getInfo means the initial credential was
+            # rejected and NpediClient renewed (or adopted a token renewed by
+            # another process).  Persist both sides of that boundary without
+            # storing either credential.
+            store.observe_token_auth_failure(
+                initial_fingerprint,
+                run_id=run_id,
+                run_kind=run_kind,
+                endpoint="/getInfo",
+            )
+            store.observe_token_success(
+                fingerprint,
+                event_type="refresh_detected",
+                run_id=run_id,
+                run_kind=run_kind,
+                endpoint="/getInfo",
+                observed_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        store.observe_token_success(
+            fingerprint,
+            event_type="probe_ok",
+            run_id=run_id,
+            run_kind=run_kind,
+            endpoint="/getInfo",
+            observed_at=now.strftime("%Y-%m-%d %H:%M:%S"),
+        )
         clear_alert(cfg)
+    return fingerprint
+
+
+def observe_token_run_ok(
+    store: Store,
+    cfg: Config,
+    *,
+    run_id: int,
+    run_kind: str,
+    request_count: int,
+) -> None:
+    store.observe_token_success(
+        token_fingerprint(cfg.token),
+        event_type="run_ok",
+        run_id=run_id,
+        run_kind=run_kind,
+        request_count=request_count,
+    )
+
+
+def observe_token_auth_failure(
+    store: Store,
+    cfg: Config,
+    *,
+    run_id: int,
+    run_kind: str,
+) -> None:
+    store.observe_token_auth_failure(
+        token_fingerprint(cfg.token),
+        run_id=run_id,
+        run_kind=run_kind,
+    )
 
 
 def _merge(target: dict[str, int], delta: dict[str, int]) -> dict[str, int]:
@@ -407,7 +509,7 @@ def run_backfill(cfg: Config, args) -> int:
         stats: dict[str, int] = {}
         try:
             # 探活放在 start_run 之后：token 失效的那一轮同样要在 sync_runs 里留痕
-            preflight(cfg, client, store, now)
+            preflight(cfg, client, store, now, run_id=run_id, run_kind="backfill")
             sync_voyage_catalog(client, store, now)
             strategy = ensure_strategy(cfg, client, store, now)
             window = no_window_or_wide(store, now)
@@ -446,9 +548,16 @@ def run_backfill(cfg: Config, args) -> int:
                     store.mark_backfilled(voy["unvessel"], voy["voyage"])
 
             store.finish_run(run_id, "ok", requests_made=client.request_count, stats=stats)
+            observe_token_run_ok(
+                store, cfg, run_id=run_id, run_kind="backfill",
+                request_count=client.request_count,
+            )
             _report(cfg, store, run_id, client, stats, "全量回填")
             return EXIT_OK
         except AuthExpired as exc:
+            observe_token_auth_failure(
+                store, cfg, run_id=run_id, run_kind="backfill"
+            )
             store.finish_run(run_id, "auth_expired", requests_made=client.request_count,
                              stats=stats, error=str(exc))
             raise
@@ -492,7 +601,7 @@ def run_incremental(cfg: Config, args, kind: str = "incremental") -> int:
         is_replay = kind == "replay"
         try:
             # 探活放在 start_run 之后：token 失效的那一轮同样要在 sync_runs 里留痕
-            preflight(cfg, client, store, now)
+            preflight(cfg, client, store, now, run_id=run_id, run_kind=kind)
             # replay 只按窗口重跑：不同步航次目录、不回填新航次，除入库外不改任何状态
             if not is_replay:
                 sync_voyage_catalog(client, store, now)
@@ -554,9 +663,16 @@ def run_incremental(cfg: Config, args, kind: str = "incremental") -> int:
                     store.mark_backfilled(voy["unvessel"], voy["voyage"])
 
             store.finish_run(run_id, "ok", requests_made=client.request_count, stats=stats)
+            observe_token_run_ok(
+                store, cfg, run_id=run_id, run_kind=kind,
+                request_count=client.request_count,
+            )
             _report(cfg, store, run_id, client, stats, kind)
             return EXIT_OK
         except AuthExpired as exc:
+            observe_token_auth_failure(
+                store, cfg, run_id=run_id, run_kind=kind
+            )
             store.finish_run(run_id, "auth_expired", requests_made=client.request_count,
                              stats=stats, error=str(exc))
             raise
@@ -574,7 +690,7 @@ def run_reconcile(cfg: Config, args) -> int:
         stats: dict[str, int] = {}
         try:
             # 探活放在 start_run 之后：token 失效的那一轮同样要在 sync_runs 里留痕
-            preflight(cfg, client, store, now)
+            preflight(cfg, client, store, now, run_id=run_id, run_kind="reconcile")
             sync_voyage_catalog(client, store, now)
             ensure_strategy(cfg, client, store, now)
             window = no_window_or_wide(store, now)
@@ -595,9 +711,16 @@ def run_reconcile(cfg: Config, args) -> int:
                 ))
                 store.mark_backfilled(voy["unvessel"], voy["voyage"])
             store.finish_run(run_id, "ok", requests_made=client.request_count, stats=stats)
+            observe_token_run_ok(
+                store, cfg, run_id=run_id, run_kind="reconcile",
+                request_count=client.request_count,
+            )
             _report(cfg, store, run_id, client, stats, "对账")
             return EXIT_OK
         except AuthExpired as exc:
+            observe_token_auth_failure(
+                store, cfg, run_id=run_id, run_kind="reconcile"
+            )
             store.finish_run(run_id, "auth_expired", requests_made=client.request_count,
                              stats=stats, error=str(exc))
             raise
@@ -713,6 +836,65 @@ def build_parser() -> argparse.ArgumentParser:
     p_gate_back.add_argument("--export-all", action="store_true",
                              help="回填结束后也重写全量快照 CSV（默认只出增量文件）")
 
+    p_gate_history = sub.add_parser(
+        "gate-history-backfill",
+        help="从船期历史点查 vesselList 遗漏航次（1–6 workers、小批断点续跑）",
+    )
+    p_gate_history.add_argument(
+        "--eta-start", required=True, help="候选 ETA 起始日 YYYY-MM-DD（含）"
+    )
+    p_gate_history.add_argument(
+        "--eta-end", required=True, help="候选 ETA 结束日 YYYY-MM-DD（含）"
+    )
+    p_gate_history.add_argument(
+        "--limit", type=int, default=10,
+        help="本批最多探测多少个船×航次（默认 10）",
+    )
+    p_gate_history.add_argument(
+        "--max-requests", type=int, default=50,
+        help="本批请求预算（默认 50，含认证；超大命中会延后，不会强行翻完）",
+    )
+    p_gate_history.add_argument(
+        "--delay-ms", type=int, default=1000,
+        help="每个 worker 的最小请求间隔毫秒（默认 1000，实际随机到 1.25 倍）",
+    )
+    p_gate_history.add_argument(
+        "--workers", type=int, choices=range(1, 7), default=1,
+        help="并发 worker 数（1–6，默认 1；每个 worker 使用独立连接）",
+    )
+    p_gate_history.add_argument(
+        "--refresh-candidates", action="store_true",
+        help="重新扫描船期事实表生成候选；默认复用同一日期范围的已生成队列",
+    )
+    p_gate_history.add_argument(
+        "--allow-recent", action="store_true",
+        help="允许结束日进入最近 30 天（可能把尚未到齐的报文误判为空）",
+    )
+    p_gate_history.add_argument(
+        "--include-new-vessels", action="store_true",
+        help="也探测 vesselList 从未出现过的船码（默认先跑已知船码，减少无效请求）",
+    )
+    p_gate_history.add_argument(
+        "--unknown-vessels-only", action="store_true",
+        help="只处理生成候选时 vesselList 从未出现过的船码（会自动生成未知船码候选）",
+    )
+    p_gate_history.add_argument(
+        "--sample-seed", default=None,
+        help="按船×航次做可复现的均匀随机样本；--limit 是固定样本量",
+    )
+    p_gate_history.add_argument(
+        "--sample-strata", default="",
+        help="可选前缀分层样本量，例如 UN:80,FC:10,CN:6（需配合 --sample-seed）",
+    )
+    p_gate_history.add_argument(
+        "--probe-only", action="store_true",
+        help="只点查双方向第一页并保存 total；命中不翻页，留作后续完整回填",
+    )
+    p_gate_history.add_argument(
+        "--seed-only", action="store_true",
+        help="仅生成并审计候选队列，不发送 CODECO 点查请求",
+    )
+
     p_gate_inc = sub.add_parser("gate-incremental", help="进出门增量（每日一次，排在 npp 增量之后）")
     p_gate_inc.add_argument("--limit", type=int, default=None, help="本轮最多检查多少个活跃航次")
     p_gate_inc.add_argument("--max-requests", type=int, default=None, help="本轮活跃航次阶段的请求预算")
@@ -727,7 +909,7 @@ def dispatch(cfg: Config, command: str, args) -> int:
     # gate 模块 import 本模块的 preflight，放在函数里加载即可避开循环导入
     from gate import (
         cmd_gate_export, cmd_gate_gap, cmd_gate_status,
-        run_gate_backfill, run_gate_incremental,
+        run_gate_backfill, run_gate_history_backfill, run_gate_incremental,
     )
 
     readonly = {
@@ -747,6 +929,7 @@ def dispatch(cfg: Config, command: str, args) -> int:
         "reconcile": run_reconcile,
         "replay": lambda c, a: run_incremental(c, a, "replay"),
         "gate-backfill": run_gate_backfill,
+        "gate-history-backfill": run_gate_history_backfill,
         "gate-incremental": run_gate_incremental,
     }
     # 两条管线各用各的锁，互不阻塞（见 Config.gate_lock_file 的说明）

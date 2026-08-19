@@ -3,6 +3,9 @@
 ALERT_TOKEN_EXPIRED
 .sync.lock
 .sync.gate.lock
+.gate-anomaly-sidecar.lock
+gate_anomaly_sidecar.sqlite.lock
+.sync.gate.sidecar.lock
 .auth-refresh.lock
 
 # 抓包文件含 token 与账号手机号/邮箱等个人信息
@@ -12,6 +15,9 @@ ALERT_TOKEN_EXPIRED
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
 export/
 logs/
 

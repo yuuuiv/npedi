@@ -245,19 +245,27 @@ def rebuild_gate_daily(store: TimeseriesStore, as_of: str | None = None) -> int:
                        COALESCE(direct,'') AS direction,
                        TRIM(inGateTime) AS raw_time, 'in' AS event_kind,
                        UPPER(substr(TRIM(COALESCE(ctnSizeType,'')),1,1)) AS size_code
-                FROM gate_events
+                FROM gate_events AS e
                 WHERE type='GATE_IN'
                   AND ctnNo IS NOT NULL AND TRIM(ctnNo)<>''
                   AND inGateTime IS NOT NULL AND TRIM(inGateTime)<>''
+                  AND NOT EXISTS (
+                      SELECT 1 FROM gate_history_rejected_pair AS r
+                      WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage
+                  )
                   {fetched_filter}
                 UNION ALL
                 SELECT UPPER(TRIM(ctnNo)), COALESCE(direct,''),
                        TRIM(outGateTime), 'out',
                        UPPER(substr(TRIM(COALESCE(ctnSizeType,'')),1,1))
-                FROM gate_events
+                FROM gate_events AS e
                 WHERE type='GATE_OUT'
                   AND ctnNo IS NOT NULL AND TRIM(ctnNo)<>''
                   AND outGateTime IS NOT NULL AND TRIM(outGateTime)<>''
+                  AND NOT EXISTS (
+                      SELECT 1 FROM gate_history_rejected_pair AS r
+                      WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage
+                  )
                   {fetched_filter}
              ), normalized AS (
                 SELECT container_no,direction,event_kind,

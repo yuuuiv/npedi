@@ -149,6 +149,41 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT,
     updated_at TEXT
 );
+
+-- WebToken lifetime observations.  Only a one-way SHA-256 fingerprint is
+-- stored; the token, Authorization header, and response bodies never enter
+-- SQLite.  Observations are deliberately batch-level to avoid write pressure.
+CREATE TABLE IF NOT EXISTS auth_token_observation (
+    fingerprint          TEXT PRIMARY KEY,
+    first_seen_at         TEXT NOT NULL,
+    first_success_at      TEXT,
+    last_success_at       TEXT,
+    last_auth_failure_at  TEXT,
+    successful_preflights INTEGER NOT NULL DEFAULT 0,
+    successful_runs       INTEGER NOT NULL DEFAULT 0,
+    successful_requests   INTEGER NOT NULL DEFAULT 0,
+    created_at             TEXT NOT NULL,
+    updated_at             TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS auth_token_event (
+    event_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_key      TEXT NOT NULL UNIQUE,
+    fingerprint    TEXT NOT NULL,
+    observed_at    TEXT NOT NULL,
+    event_type     TEXT NOT NULL
+                   CHECK(event_type IN (
+                       'probe_ok','run_ok','auth_failed','refresh_detected'
+                   )),
+    run_id         INTEGER,
+    run_kind       TEXT,
+    endpoint       TEXT,
+    http_status    INTEGER,
+    api_code       INTEGER,
+    request_count  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_auth_token_event_time
+    ON auth_token_event(observed_at, event_type);
 """
 
 # --------------------------------------------------------------------------
@@ -220,6 +255,74 @@ CREATE TABLE IF NOT EXISTS gate_voyages (
 CREATE INDEX IF NOT EXISTS idx_gate_voyages_pending
     ON gate_voyages(gatein_done_at, gateout_done_at);
 
+-- vesselList 只是一份目录快照，并不枚举完整历史。这个独立队列从船期事实表
+-- 发现目录外的船×航次，先点查、命中后才写入 gate_voyages，避免数十万个
+-- 空候选污染正式目录。命令当前严格单线程运行。
+CREATE TABLE IF NOT EXISTS gate_history_candidate (
+    vesselcode       TEXT NOT NULL,
+    voyage           TEXT NOT NULL,
+    vesselename      TEXT,
+    first_eta        TEXT NOT NULL,
+    last_eta         TEXT NOT NULL,
+    source_plan_rows INTEGER NOT NULL DEFAULT 0,
+    vessel_in_catalog INTEGER NOT NULL DEFAULT 0,
+    status           TEXT NOT NULL DEFAULT 'pending'
+                     CHECK(status IN ('pending','hit','empty','complete')),
+    attempt_count    INTEGER NOT NULL DEFAULT 0,
+    probed_at        TEXT,
+    gatein_total     INTEGER,
+    gateout_total    INTEGER,
+    discovered_at    TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    PRIMARY KEY (vesselcode, voyage)
+);
+CREATE INDEX IF NOT EXISTS idx_gate_history_candidate_pending
+    ON gate_history_candidate(status, last_eta DESC, vesselcode, voyage);
+
+-- 保留候选在哪个月份出现过的证据。不能仅靠 first_eta/last_eta 推断月份：
+-- 同一个船×航次可能只在 1 月和 3 月快照里出现，并不代表它在 2 月也出现。
+CREATE TABLE IF NOT EXISTS gate_history_candidate_month (
+    vesselcode       TEXT NOT NULL,
+    voyage           TEXT NOT NULL,
+    eta_month        TEXT NOT NULL,
+    vesselename      TEXT,
+    first_eta        TEXT NOT NULL,
+    last_eta         TEXT NOT NULL,
+    source_plan_rows INTEGER NOT NULL DEFAULT 0,
+    discovered_at    TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    PRIMARY KEY (vesselcode, voyage, eta_month)
+);
+CREATE INDEX IF NOT EXISTS idx_gate_history_candidate_month_scope
+    ON gate_history_candidate_month(eta_month, vesselcode, voyage);
+
+CREATE TABLE IF NOT EXISTS gate_history_seed_scope (
+    eta_start          TEXT NOT NULL,
+    eta_end_exclusive  TEXT NOT NULL,
+    known_vessels_only INTEGER NOT NULL,
+    seeded_at          TEXT NOT NULL,
+    PRIMARY KEY (eta_start, eta_end_exclusive, known_vessels_only)
+);
+
+-- Clearly invalid plan keys are retained for audit but are never sent to the
+-- remote endpoint.  Querying a placeholder vessel code is more dangerous than
+-- merely wasting a request: a server-side ignored filter could return rows
+-- which the importer would otherwise attribute to that placeholder code.
+CREATE TABLE IF NOT EXISTS gate_history_rejected_pair (
+    vesselcode       TEXT NOT NULL,
+    voyage           TEXT NOT NULL,
+    reason           TEXT NOT NULL,
+    vesselename      TEXT,
+    first_eta        TEXT NOT NULL,
+    last_eta         TEXT NOT NULL,
+    source_plan_rows INTEGER NOT NULL DEFAULT 0,
+    discovered_at    TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    PRIMARY KEY (vesselcode, voyage)
+);
+CREATE INDEX IF NOT EXISTS idx_gate_history_rejected_reason
+    ON gate_history_rejected_pair(reason, last_eta DESC);
+
 -- 进出门报文流水。id 里含接收时间戳，报文天然只增不改（append-only），
 -- 所以这里没有 row_hash / 变更历史那一套 —— 做了是纯开销。
 CREATE TABLE IF NOT EXISTS gate_events (
@@ -260,6 +363,32 @@ def _norm(value: Any) -> str:
     if isinstance(value, str):
         return value.strip()
     return str(value)
+
+
+def gate_history_invalid_reason(vesselcode: Any, voyage: Any) -> str:
+    """Return a stable quarantine reason for an unsafe plan-derived key.
+
+    The filter is intentionally narrow.  Non-UN/FC/CN namespaces remain
+    eligible because real CODECO data has already been observed under other
+    namespaces.  We only quarantine known placeholders and voyage values that
+    cannot be an exact API key (whitespace/non-ASCII/manual notes).
+    """
+    code = _norm(vesselcode)
+    trip = _norm(voyage)
+    placeholder_chars = frozenset("0?/.· -_")
+    if not code:
+        return "empty_vesselcode"
+    if code.upper() == "FC0000000" or all(ch in placeholder_chars for ch in code):
+        return "placeholder_vesselcode"
+    if not trip:
+        return "empty_voyage"
+    if all(ch in placeholder_chars for ch in trip):
+        return "placeholder_voyage"
+    if any(ch.isspace() for ch in trip):
+        return "voyage_contains_whitespace"
+    if not trip.isascii():
+        return "voyage_non_ascii"
+    return ""
 
 
 def parse_portclose(raw: str | None, now: datetime) -> str | None:
@@ -308,6 +437,12 @@ class Store:
         # WAL 下同一时刻只允许一个写者，撞上了就等对方提交（每页一提交，都是毫秒级）。
         self.conn = sqlite3.connect(self.path, timeout=60.0)
         self.conn.row_factory = sqlite3.Row
+        self.conn.create_function(
+            "gate_history_invalid_reason",
+            2,
+            gate_history_invalid_reason,
+            deterministic=True,
+        )
         self.conn.executescript(SCHEMA)
         self.conn.executescript(GATE_SCHEMA)
         self._migrate()
@@ -348,6 +483,130 @@ class Store:
         )
         self.conn.commit()
 
+    # ------------------------------------------------------------- token audit
+
+    def observe_token_seen(self, fingerprint: str, observed_at: str | None = None) -> None:
+        """Register a token fingerprint without claiming it authenticated."""
+        ts = observed_at or now_iso()
+        self.conn.execute(
+            """
+            INSERT INTO auth_token_observation(
+                fingerprint,first_seen_at,created_at,updated_at
+            ) VALUES(?,?,?,?)
+            ON CONFLICT(fingerprint) DO UPDATE SET
+                first_seen_at=MIN(
+                    auth_token_observation.first_seen_at,
+                    excluded.first_seen_at
+                ),
+                updated_at=excluded.updated_at
+            """,
+            (fingerprint, ts, ts, ts),
+        )
+        self.conn.commit()
+
+    def observe_token_success(
+        self,
+        fingerprint: str,
+        *,
+        event_type: str,
+        run_id: int | None,
+        run_kind: str,
+        request_count: int = 0,
+        endpoint: str = "",
+        observed_at: str | None = None,
+    ) -> None:
+        if event_type not in {"probe_ok", "run_ok", "refresh_detected"}:
+            raise ValueError(f"unsupported token success event: {event_type}")
+        ts = observed_at or now_iso()
+        self.conn.execute(
+            """
+            INSERT INTO auth_token_observation(
+                fingerprint,first_seen_at,created_at,updated_at
+            ) VALUES(?,?,?,?)
+            ON CONFLICT(fingerprint) DO NOTHING
+            """,
+            (fingerprint, ts, ts, ts),
+        )
+        suffix = f"run:{run_id}" if run_id is not None else f"time:{ts}"
+        event_key = f"{fingerprint}:{event_type}:{suffix}"
+        inserted = self.conn.execute(
+            """
+            INSERT OR IGNORE INTO auth_token_event(
+                event_key,fingerprint,observed_at,event_type,run_id,run_kind,
+                endpoint,request_count
+            ) VALUES(?,?,?,?,?,?,?,?)
+            """,
+            (
+                event_key, fingerprint, ts, event_type, run_id,
+                run_kind or None, endpoint or None, max(int(request_count), 0),
+            ),
+        ).rowcount
+        if inserted:
+            self.conn.execute(
+                """
+                UPDATE auth_token_observation
+                SET first_success_at=COALESCE(first_success_at,?),
+                    last_success_at=?,
+                    successful_preflights=successful_preflights+?,
+                    successful_runs=successful_runs+?,
+                    successful_requests=successful_requests+?,
+                    updated_at=?
+                WHERE fingerprint=?
+                """,
+                (
+                    ts, ts, int(event_type == "probe_ok"),
+                    int(event_type == "run_ok"),
+                    max(int(request_count), 0) if event_type == "run_ok" else 0,
+                    ts, fingerprint,
+                ),
+            )
+        self.conn.commit()
+
+    def observe_token_auth_failure(
+        self,
+        fingerprint: str,
+        *,
+        run_id: int | None,
+        run_kind: str,
+        endpoint: str = "",
+        http_status: int | None = None,
+        api_code: int | None = None,
+        observed_at: str | None = None,
+    ) -> None:
+        ts = observed_at or now_iso()
+        self.conn.execute(
+            """
+            INSERT INTO auth_token_observation(
+                fingerprint,first_seen_at,created_at,updated_at
+            ) VALUES(?,?,?,?)
+            ON CONFLICT(fingerprint) DO NOTHING
+            """,
+            (fingerprint, ts, ts, ts),
+        )
+        suffix = f"run:{run_id}" if run_id is not None else f"time:{ts}"
+        event_key = f"{fingerprint}:auth_failed:{suffix}"
+        inserted = self.conn.execute(
+            """
+            INSERT OR IGNORE INTO auth_token_event(
+                event_key,fingerprint,observed_at,event_type,run_id,run_kind,
+                endpoint,http_status,api_code
+            ) VALUES(?,?,?,'auth_failed',?,?,?,?,?)
+            """,
+            (
+                event_key, fingerprint, ts, run_id, run_kind or None,
+                endpoint or None, http_status, api_code,
+            ),
+        ).rowcount
+        if inserted:
+            self.conn.execute(
+                """
+                UPDATE auth_token_observation
+                SET last_auth_failure_at=?,updated_at=? WHERE fingerprint=?
+                """,
+                (ts, ts, fingerprint),
+            )
+        self.conn.commit()
+
     # ------------------------------------------------------------- runs
 
     def start_run(self, kind: str, wm_from: str | None, wm_to: str | None,
@@ -357,7 +616,7 @@ class Store:
         stale = self.conn.execute(
             "UPDATE sync_runs SET status='interrupted', finished_at=?, "
             "error='进程未正常结束（被中断或崩溃），断点已保留' "
-            "WHERE status='running'", (now_iso(),),
+            "WHERE status='running' AND kind=?", (now_iso(), kind),
         ).rowcount
         if stale:
             log.warning("发现 %d 条未收尾的运行记录，已标记为 interrupted", stale)
@@ -691,6 +950,405 @@ class Store:
         self.conn.commit()
         return stats, new_keys
 
+    def seed_gate_history_candidates(
+        self,
+        eta_start: str,
+        eta_end_exclusive: str,
+        *,
+        known_vessels_only: bool = True,
+        refresh: bool = False,
+    ) -> dict[str, int]:
+        """Discover vessel-plan pairs omitted from the CODECO catalog snapshot.
+
+        ``eta_end_exclusive`` keeps the SQL boundary unambiguous.  By default
+        only vessels already accepted by CODECO's own vesselList are included;
+        this avoids spending requests on vessel-code namespaces the endpoint
+        may not understand.  Empty probes remain in this separate audit queue
+        and are never inserted into ``gate_voyages``.
+        """
+        if not self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='fact_vessel_plan_snapshot'"
+        ).fetchone():
+            raise RuntimeError(
+                "fact_vessel_plan_snapshot 不存在；请先完成船期历史采集与规范化"
+            )
+
+        scope_key = (eta_start, eta_end_exclusive, int(known_vessels_only))
+        if not refresh and self.conn.execute(
+            "SELECT 1 FROM gate_history_seed_scope "
+            "WHERE eta_start=? AND eta_end_exclusive=? AND known_vessels_only=?",
+            scope_key,
+        ).fetchone():
+            return {
+                "inserted": 0,
+                "rejected": int(self.conn.execute(
+                    """
+                    SELECT COUNT(*) FROM gate_history_rejected_pair AS r
+                    WHERE r.last_eta>=? AND r.first_eta<?
+                    """,
+                    (eta_start, eta_end_exclusive),
+                ).fetchone()[0]),
+                "pending": self.gate_history_candidate_count_in_scope(
+                    eta_start, eta_end_exclusive, statuses=("pending", "hit")
+                ),
+                "reused": 1,
+            }
+
+        known_filter = """
+          AND EXISTS (
+              SELECT 1 FROM gate_voyages AS vessel_match
+              WHERE vessel_match.vesselcode=TRIM(p.vessel_code)
+          )
+        """ if known_vessels_only else ""
+        valid_filter = """
+          AND gate_history_invalid_reason(
+                  TRIM(p.vessel_code),TRIM(p.voyage)
+              )=''
+        """
+        before_count = int(self.conn.execute(
+            "SELECT COUNT(*) FROM gate_history_candidate"
+        ).fetchone()[0])
+        ts = now_iso()
+        # Freeze unsafe keys in a separate audit table.  They are deliberately
+        # not represented as ``empty`` because no remote query was attempted.
+        self.conn.execute(
+            """
+            INSERT INTO gate_history_rejected_pair(
+                vesselcode,voyage,reason,vesselename,first_eta,last_eta,
+                source_plan_rows,discovered_at,updated_at
+            )
+            SELECT TRIM(p.vessel_code),TRIM(p.voyage),
+                   gate_history_invalid_reason(
+                       TRIM(p.vessel_code),TRIM(p.voyage)
+                   ),
+                   MAX(COALESCE(p.vessel_en_name,'')),
+                   MIN(substr(p.eta,1,10)),MAX(substr(p.eta,1,10)),COUNT(*),?,?
+            FROM fact_vessel_plan_snapshot AS p
+            WHERE p.eta>=? AND p.eta<?
+              AND p.vessel_code IS NOT NULL AND TRIM(p.vessel_code)<>''
+              AND p.voyage IS NOT NULL AND TRIM(p.voyage)<>''
+              AND gate_history_invalid_reason(
+                      TRIM(p.vessel_code),TRIM(p.voyage)
+                  )<>''
+            GROUP BY TRIM(p.vessel_code),TRIM(p.voyage)
+            ON CONFLICT(vesselcode,voyage) DO UPDATE SET
+                reason=excluded.reason,
+                vesselename=COALESCE(
+                    NULLIF(excluded.vesselename,''),
+                    gate_history_rejected_pair.vesselename
+                ),
+                first_eta=MIN(gate_history_rejected_pair.first_eta,excluded.first_eta),
+                last_eta=MAX(gate_history_rejected_pair.last_eta,excluded.last_eta),
+                source_plan_rows=MAX(
+                    gate_history_rejected_pair.source_plan_rows,
+                    excluded.source_plan_rows
+                ),
+                updated_at=excluded.updated_at
+            """,
+            (ts, ts, eta_start, eta_end_exclusive),
+        )
+        self.conn.execute(
+            f"""
+            INSERT INTO gate_history_candidate(
+                vesselcode,voyage,vesselename,first_eta,last_eta,
+                source_plan_rows,vessel_in_catalog,status,
+                discovered_at,updated_at
+            )
+            SELECT TRIM(p.vessel_code),TRIM(p.voyage),
+                   MAX(COALESCE(p.vessel_en_name,'')),
+                   MIN(substr(p.eta,1,10)),MAX(substr(p.eta,1,10)),
+                   COUNT(*),
+                   EXISTS(
+                       SELECT 1 FROM gate_voyages AS vessel_match
+                       WHERE vessel_match.vesselcode=TRIM(p.vessel_code)
+                   ),
+                   'pending',?,?
+            FROM fact_vessel_plan_snapshot AS p
+            WHERE p.eta>=? AND p.eta<?
+              AND p.vessel_code IS NOT NULL AND TRIM(p.vessel_code)<>''
+              AND p.voyage IS NOT NULL AND TRIM(p.voyage)<>''
+              {valid_filter}
+              AND NOT EXISTS (
+                  SELECT 1 FROM gate_voyages AS exact_match
+                  WHERE exact_match.vesselcode=TRIM(p.vessel_code)
+                    AND exact_match.voyage=TRIM(p.voyage)
+              )
+              {known_filter}
+            GROUP BY TRIM(p.vessel_code),TRIM(p.voyage)
+            ON CONFLICT(vesselcode,voyage) DO UPDATE SET
+                vesselename=COALESCE(
+                    NULLIF(excluded.vesselename,''),gate_history_candidate.vesselename
+                ),
+                first_eta=MIN(gate_history_candidate.first_eta,excluded.first_eta),
+                last_eta=MAX(gate_history_candidate.last_eta,excluded.last_eta),
+                source_plan_rows=MAX(
+                    gate_history_candidate.source_plan_rows,excluded.source_plan_rows
+                ),
+                vessel_in_catalog=MAX(
+                    gate_history_candidate.vessel_in_catalog,excluded.vessel_in_catalog
+                ),
+                updated_at=excluded.updated_at
+            """,
+            (ts, ts, eta_start, eta_end_exclusive),
+        )
+        self.conn.execute(
+            f"""
+            INSERT INTO gate_history_candidate_month(
+                vesselcode,voyage,eta_month,vesselename,first_eta,last_eta,
+                source_plan_rows,discovered_at,updated_at
+            )
+            SELECT TRIM(p.vessel_code),TRIM(p.voyage),substr(p.eta,1,7),
+                   MAX(COALESCE(p.vessel_en_name,'')),
+                   MIN(substr(p.eta,1,10)),MAX(substr(p.eta,1,10)),COUNT(*),?,?
+            FROM fact_vessel_plan_snapshot AS p
+            WHERE p.eta>=? AND p.eta<?
+              AND p.vessel_code IS NOT NULL AND TRIM(p.vessel_code)<>''
+              AND p.voyage IS NOT NULL AND TRIM(p.voyage)<>''
+              {valid_filter}
+              AND EXISTS (
+                  SELECT 1 FROM gate_history_candidate AS c
+                  WHERE c.vesselcode=TRIM(p.vessel_code)
+                    AND c.voyage=TRIM(p.voyage)
+              )
+              {known_filter}
+            GROUP BY TRIM(p.vessel_code),TRIM(p.voyage),substr(p.eta,1,7)
+            ON CONFLICT(vesselcode,voyage,eta_month) DO UPDATE SET
+                vesselename=COALESCE(
+                    NULLIF(excluded.vesselename,''),
+                    gate_history_candidate_month.vesselename
+                ),
+                first_eta=excluded.first_eta,last_eta=excluded.last_eta,
+                source_plan_rows=excluded.source_plan_rows,
+                updated_at=excluded.updated_at
+            """,
+            (ts, ts, eta_start, eta_end_exclusive),
+        )
+        after_count = int(self.conn.execute(
+            "SELECT COUNT(*) FROM gate_history_candidate"
+        ).fetchone()[0])
+        inserted = after_count - before_count
+        self.conn.execute(
+            """
+            INSERT INTO gate_history_seed_scope(
+                eta_start,eta_end_exclusive,known_vessels_only,seeded_at
+            ) VALUES(?,?,?,?)
+            ON CONFLICT(eta_start,eta_end_exclusive,known_vessels_only)
+            DO UPDATE SET seeded_at=excluded.seeded_at
+            """,
+            (*scope_key, ts),
+        )
+        self.conn.commit()
+        return {
+            "inserted": int(inserted),
+            "rejected": int(self.conn.execute(
+                """
+                SELECT COUNT(*) FROM gate_history_rejected_pair AS r
+                WHERE r.last_eta>=? AND r.first_eta<?
+                """,
+                (eta_start, eta_end_exclusive),
+            ).fetchone()[0]),
+            "pending": self.gate_history_candidate_count_in_scope(
+                eta_start, eta_end_exclusive, statuses=("pending", "hit")
+            ),
+            "reused": 0,
+        }
+
+    def gate_history_candidate_count_in_scope(
+        self,
+        eta_start: str,
+        eta_end_exclusive: str,
+        *,
+        statuses: Sequence[str],
+        vessel_in_catalog: bool | None = None,
+    ) -> int:
+        placeholders = ",".join("?" for _ in statuses)
+        catalog_filter = (
+            "" if vessel_in_catalog is None else " AND c.vessel_in_catalog=?"
+        )
+        params: tuple[Any, ...] = (*statuses, eta_start, eta_end_exclusive)
+        if vessel_in_catalog is not None:
+            params += (int(vessel_in_catalog),)
+        return int(self.conn.execute(
+            f"""
+            SELECT COUNT(*) FROM gate_history_candidate AS c
+            WHERE c.status IN ({placeholders})
+              AND NOT EXISTS (
+                  SELECT 1 FROM gate_history_rejected_pair AS rejected
+                  WHERE rejected.vesselcode=c.vesselcode
+                    AND rejected.voyage=c.voyage
+              )
+              AND EXISTS (
+                  SELECT 1 FROM gate_history_candidate_month AS m
+                  WHERE m.vesselcode=c.vesselcode AND m.voyage=c.voyage
+                    AND m.last_eta>=? AND m.first_eta<?
+              )
+              {catalog_filter}
+            """,
+            params,
+        ).fetchone()[0])
+
+    def gate_history_candidates_pending(
+        self,
+        *,
+        eta_start: str,
+        eta_end_exclusive: str,
+        limit: int | None,
+        statuses: Sequence[str] = ("pending", "hit"),
+        vessel_in_catalog: bool | None = None,
+    ) -> list[sqlite3.Row]:
+        """Return scoped history candidates with optional catalog filtering."""
+        # A normal vesselList refresh may have filled a queued pair since it
+        # was discovered.  Reconcile that locally instead of querying it again.
+        self.conn.execute(
+            """
+            UPDATE gate_history_candidate AS c
+            SET status='complete',updated_at=?
+            WHERE c.status IN ('pending','hit')
+              AND NOT EXISTS (
+                  SELECT 1 FROM gate_history_rejected_pair AS rejected
+                  WHERE rejected.vesselcode=c.vesselcode
+                    AND rejected.voyage=c.voyage
+              )
+              AND EXISTS (
+                SELECT 1 FROM gate_voyages AS g
+                WHERE g.vesselcode=c.vesselcode AND g.voyage=c.voyage
+                  AND g.gatein_done_at IS NOT NULL
+                  AND g.gateout_done_at IS NOT NULL
+            )
+            """,
+            (now_iso(),),
+        )
+        self.conn.commit()
+        placeholders = ",".join("?" for _ in statuses)
+        catalog_filter = (
+            "" if vessel_in_catalog is None else " AND c.vessel_in_catalog=?"
+        )
+        limit_clause = "" if limit is None else " LIMIT ?"
+        params: tuple[Any, ...] = (*statuses, eta_start, eta_end_exclusive)
+        if vessel_in_catalog is not None:
+            params += (int(vessel_in_catalog),)
+        if limit is not None:
+            params += (limit,)
+        return self.conn.execute(
+            f"""
+            SELECT c.*,
+                   g.gatein_done_at AS existing_gatein_done_at,
+                   g.gatein_total AS existing_gatein_total,
+                   g.gateout_done_at AS existing_gateout_done_at,
+                   g.gateout_total AS existing_gateout_total,
+                   CASE WHEN g.vesselcode IS NULL THEN 0 ELSE 1 END AS exact_gate_match
+            FROM gate_history_candidate AS c
+            LEFT JOIN gate_voyages AS g
+              ON g.vesselcode=c.vesselcode AND g.voyage=c.voyage
+            WHERE c.status IN ({placeholders})
+              AND NOT EXISTS (
+                  SELECT 1 FROM gate_history_rejected_pair AS rejected
+                  WHERE rejected.vesselcode=c.vesselcode
+                    AND rejected.voyage=c.voyage
+              )
+              AND EXISTS (
+                  SELECT 1 FROM gate_history_candidate_month AS m
+                  WHERE m.vesselcode=c.vesselcode AND m.voyage=c.voyage
+                    AND m.last_eta>=? AND m.first_eta<?
+              )
+              {catalog_filter}
+            ORDER BY CASE c.status WHEN 'hit' THEN 0 ELSE 1 END,
+                     c.last_eta DESC,c.vesselcode,c.voyage
+            {limit_clause}
+            """,
+            params,
+        ).fetchall()
+
+    def note_gate_history_probe(
+        self,
+        vesselcode: str,
+        voyage: str,
+        *,
+        gatein_total: int | None,
+        gateout_total: int | None,
+    ) -> None:
+        """Persist a completed first-page probe before any potentially long fetch."""
+        ts = now_iso()
+        self.conn.execute(
+            """
+            UPDATE gate_history_candidate
+            SET status=CASE WHEN COALESCE(?,0)+COALESCE(?,0)>0
+                            THEN 'hit' ELSE status END,
+                attempt_count=attempt_count+1,probed_at=?,
+                gatein_total=COALESCE(?,gatein_total),
+                gateout_total=COALESCE(?,gateout_total),updated_at=?
+            WHERE vesselcode=? AND voyage=?
+            """,
+            (
+                gatein_total, gateout_total, ts,
+                gatein_total, gateout_total, ts, vesselcode, voyage,
+            ),
+        )
+        self.conn.commit()
+
+    def add_gate_history_voyage(
+        self, vesselcode: str, voyage: str, vesselename: str
+    ) -> None:
+        """Promote a proven non-empty candidate into the real gate catalog."""
+        ts = now_iso()
+        self.conn.execute(
+            """
+            INSERT INTO gate_voyages(
+                vesselcode,voyage,vesselename,first_seen_at,last_seen_at
+            ) VALUES(?,?,?,?,?)
+            ON CONFLICT(vesselcode,voyage) DO UPDATE SET
+                vesselename=COALESCE(
+                    NULLIF(excluded.vesselename,''),gate_voyages.vesselename
+                )
+            """,
+            (vesselcode, voyage, vesselename, ts, ts),
+        )
+        self.conn.commit()
+
+    def finish_gate_history_candidate(
+        self,
+        vesselcode: str,
+        voyage: str,
+        *,
+        status: str,
+        gatein_total: int,
+        gateout_total: int,
+    ) -> None:
+        if status not in {"empty", "complete"}:
+            raise ValueError(f"unsupported gate history status: {status}")
+        ts = now_iso()
+        self.conn.execute(
+            """
+            UPDATE gate_history_candidate
+            SET status=?,probed_at=COALESCE(probed_at,?),
+                gatein_total=?,gateout_total=?,updated_at=?
+            WHERE vesselcode=? AND voyage=?
+            """,
+            (status, ts, gatein_total, gateout_total, ts, vesselcode, voyage),
+        )
+        self.conn.commit()
+
+    def gate_history_candidate_counts(self) -> dict[str, int]:
+        counts = {"pending": 0, "hit": 0, "empty": 0, "complete": 0}
+        for row in self.conn.execute(
+            """
+            SELECT c.status,COUNT(*) FROM gate_history_candidate AS c
+            WHERE NOT EXISTS (
+                SELECT 1 FROM gate_history_rejected_pair AS rejected
+                WHERE rejected.vesselcode=c.vesselcode
+                  AND rejected.voyage=c.voyage
+            )
+            GROUP BY c.status
+            """
+        ):
+            counts[str(row[0])] = int(row[1])
+        counts["total"] = sum(counts.values())
+        counts["rejected"] = int(self.conn.execute(
+            "SELECT COUNT(*) FROM gate_history_rejected_pair"
+        ).fetchone()[0])
+        return counts
+
     def gate_units_pending(
         self, *, limit: int | None = None, keys: Sequence[tuple[str, str]] | None = None,
     ) -> list[tuple[str, str, str, str]]:
@@ -857,43 +1515,92 @@ class Store:
     def gate_counts(self) -> dict[str, int]:
         q = lambda sql: int(self.conn.execute(sql).fetchone()[0])  # noqa: E731
         return {
-            "voyages": q("SELECT COUNT(*) FROM gate_voyages"),
-            "voyages_done": q(
-                "SELECT COUNT(*) FROM gate_voyages "
-                "WHERE gatein_done_at IS NOT NULL AND gateout_done_at IS NOT NULL"
+            "voyages": q(
+                "SELECT COUNT(*) FROM gate_voyages AS g WHERE NOT EXISTS ("
+                "SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage)"
             ),
-            "voyages_inactive": q("SELECT COUNT(*) FROM gate_voyages WHERE inactive=1"),
-            "events": q("SELECT COUNT(*) FROM gate_events"),
-            "events_in": q("SELECT COUNT(*) FROM gate_events WHERE \"type\"='GATE_IN'"),
-            "events_out": q("SELECT COUNT(*) FROM gate_events WHERE \"type\"='GATE_OUT'"),
+            "voyages_done": q(
+                "SELECT COUNT(*) FROM gate_voyages AS g "
+                "WHERE gatein_done_at IS NOT NULL AND gateout_done_at IS NOT NULL "
+                "AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage)"
+            ),
+            "voyages_inactive": q(
+                "SELECT COUNT(*) FROM gate_voyages AS g WHERE inactive=1 "
+                "AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage)"
+            ),
+            "voyages_quarantined": q(
+                "SELECT COUNT(*) FROM gate_voyages AS g WHERE EXISTS ("
+                "SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage)"
+            ),
+            "events": q(
+                "SELECT COUNT(*) FROM gate_events AS e WHERE NOT EXISTS ("
+                "SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage)"
+            ),
+            "events_in": q(
+                "SELECT COUNT(*) FROM gate_events AS e WHERE e.\"type\"='GATE_IN' "
+                "AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage)"
+            ),
+            "events_out": q(
+                "SELECT COUNT(*) FROM gate_events AS e WHERE e.\"type\"='GATE_OUT' "
+                "AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage)"
+            ),
+            "events_quarantined": q(
+                "SELECT COUNT(*) FROM gate_events AS e WHERE EXISTS ("
+                "SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage)"
+            ),
         }
 
     def gate_event_time_range(self) -> tuple[str | None, str | None]:
         row = self.conn.execute(
-            'SELECT MIN("msgReceiveTime"), MAX("msgReceiveTime") FROM gate_events '
-            'WHERE TRIM(COALESCE("msgReceiveTime", \'\')) <> \'\''
+            'SELECT MIN(e."msgReceiveTime"), MAX(e."msgReceiveTime") FROM gate_events AS e '
+            'WHERE TRIM(COALESCE(e."msgReceiveTime", \'\')) <> \'\' '
+            'AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r '
+            'WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage)'
         ).fetchone()
         return (row[0], row[1]) if row else (None, None)
 
     def gate_run_event_count(self, run_id: int) -> int:
         return int(self.conn.execute(
-            "SELECT COUNT(*) FROM gate_events WHERE run_id=?", (run_id,)
+            "SELECT COUNT(*) FROM gate_events AS e WHERE run_id=? "
+            "AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+            "WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage)",
+            (run_id,),
         ).fetchone()[0])
 
-    def iter_gate_events(self, *, active_only: bool = False) -> Iterable[sqlite3.Row]:
-        sql = f'SELECT {_GATE_COLS}, fetched_at FROM gate_events'
+    def iter_gate_events(
+        self, *, active_only: bool = False, include_quarantined: bool = False,
+    ) -> Iterable[sqlite3.Row]:
+        sql = f'SELECT {_GATE_COLS}, e.fetched_at FROM gate_events AS e'
+        conditions: list[str] = []
+        if not include_quarantined:
+            conditions.append(
+                "NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage)"
+            )
         if active_only:
-            sql += (
-                " WHERE (vesselcode, voyage) IN "
+            conditions.append(
+                "(e.vesselcode, e.voyage) IN "
                 "(SELECT vesselcode, voyage FROM gate_voyages WHERE inactive=0)"
             )
-        sql += ' ORDER BY vesselcode, voyage, "msgReceiveTime"'
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
+        sql += ' ORDER BY e.vesselcode, e.voyage, e."msgReceiveTime"'
         yield from self.conn.execute(sql)
 
     def iter_gate_run_events(self, run_id: int) -> Iterable[sqlite3.Row]:
         yield from self.conn.execute(
-            f'SELECT {_GATE_COLS}, fetched_at FROM gate_events WHERE run_id=? '
-            'ORDER BY vesselcode, voyage, "msgReceiveTime"',
+            f'SELECT {_GATE_COLS}, e.fetched_at FROM gate_events AS e WHERE run_id=? '
+            'AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r '
+            'WHERE r.vesselcode=e.vesselcode AND r.voyage=e.voyage) '
+            'ORDER BY e.vesselcode, e.voyage, e."msgReceiveTime"',
             (run_id,),
         )
 
@@ -901,24 +1608,43 @@ class Store:
         yield from self.conn.execute(
             "SELECT vesselcode, voyage, vesselename, first_seen_at, last_seen_at, last_event_at, "
             "gatein_done_at, gatein_total, gateout_done_at, gateout_total, idle_rounds, inactive "
-            "FROM gate_voyages ORDER BY COALESCE(last_event_at, '') DESC, vesselcode, voyage"
+            "FROM gate_voyages AS g WHERE NOT EXISTS ("
+            "SELECT 1 FROM gate_history_rejected_pair AS r "
+            "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage) "
+            "ORDER BY COALESCE(last_event_at, '') DESC, vesselcode, voyage"
         )
 
     def iter_gate_gap(self) -> Iterable[sqlite3.Row]:
         """闸口有报文、npp 核放库里却查不到的箱子（ARCHITECTURE-GATE.md §5）。"""
         yield from self.conn.execute(
-            "SELECT * FROM v_gate_vs_npp WHERE npp_id IS NULL "
+            "SELECT * FROM v_gate_vs_npp AS g WHERE npp_id IS NULL "
+            "AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+            "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage) "
             'ORDER BY vesselcode, voyage, "ctnNo"'
         )
 
     def gate_gap_summary(self) -> dict[str, int]:
         q = lambda sql: int(self.conn.execute(sql).fetchone()[0])  # noqa: E731
         return {
-            "gate_events": q("SELECT COUNT(*) FROM v_gate_vs_npp"),
-            "matched": q("SELECT COUNT(*) FROM v_gate_vs_npp WHERE npp_id IS NOT NULL"),
-            "gap": q("SELECT COUNT(*) FROM v_gate_vs_npp WHERE npp_id IS NULL"),
+            "gate_events": q(
+                "SELECT COUNT(*) FROM v_gate_vs_npp AS g WHERE NOT EXISTS ("
+                "SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage)"
+            ),
+            "matched": q(
+                "SELECT COUNT(*) FROM v_gate_vs_npp AS g WHERE npp_id IS NOT NULL "
+                "AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage)"
+            ),
+            "gap": q(
+                "SELECT COUNT(*) FROM v_gate_vs_npp AS g WHERE npp_id IS NULL "
+                "AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage)"
+            ),
             "gap_voyages": q(
                 "SELECT COUNT(*) FROM (SELECT DISTINCT vesselcode, voyage "
-                "FROM v_gate_vs_npp WHERE npp_id IS NULL)"
+                "FROM v_gate_vs_npp AS g WHERE npp_id IS NULL "
+                "AND NOT EXISTS (SELECT 1 FROM gate_history_rejected_pair AS r "
+                "WHERE r.vesselcode=g.vesselcode AND r.voyage=g.voyage))"
             ),
         }

@@ -35,7 +35,11 @@ class AnalyticsTests(unittest.TestCase):
             self.assertGreater(snapshot_trends(store), 0)
             output = render_curves(store, Path(self.tmp.name) / "curves.html")
             self.assertTrue(output.exists())
-            self.assertIn("Plotly.newPlot", output.read_text(encoding="utf-8"))
+            html = output.read_text(encoding="utf-8")
+            self.assertIn("Plotly.newPlot", html)
+            self.assertIn("历史补爬和覆盖验收完成前暂停展示", html)
+            self.assertIn('"gate_history_validated": false', html)
+            self.assertIn('"gate": []', html)
 
     def test_data_insufficient_is_not_forced_into_a_cluster(self):
         with TimeseriesStore(self.db) as store:
@@ -45,4 +49,3 @@ class AnalyticsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
