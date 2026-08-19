@@ -1,169 +1,269 @@
 # NPEDI 项目交接说明
 
-最后更新：2026-08-11 14:46（Asia/Shanghai）
+最后更新：2026-08-19 10:40（Asia/Shanghai）
 
 ## 一句话状态
 
-项目正在对由完整 CODECO 闸口历史建立的 2,488,083 个有效 ISO 6346 箱号，分别执行 VGM 和 container-history 远程全量增强。两类任务都支持并发认领、断点续跑和失败回收；当前没有队列错误，预计以 container-history 为准还需约 1.7 天，即在 2026-08-13 前后完成远程采集。完成后还需要运行离线聚合、周曲线、质量报告和仪表板重建。
+远程增强（VGM、container-history）已经全部跑完；CODECO 历史回填做到 82%，
+**从 2026-08-18 19:35 起停摆至今**，卡在 token 上，不是代码问题。
+恢复需要人手工换一次 Web-Token。
 
-## 当前正在运行什么
+## 现在卡在哪
 
-当前后台主要是两类逐箱请求：
+2026-08-18 19:35:30，回填在处理 2021-07-01/02 的候选时收到 401，包装脚本按设计
+重试两次自动登录、都被拒，于是保留断点退出。此后没有任何采集进程在跑，
+`ALERT_TOKEN_EXPIRED` 一直挂着没人处理。
 
-- VGM：查询每个箱号对应的 VGM 记录；
-- container-history：查询每个箱号的历史轨迹事件。
-
-2026-08-11 14:46 的数据库快照：
-
-| 任务 | 已完成 | 总量 | 完成率 | 剩余 | 近 30 分钟速度 | ETA |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| VGM | 1,633,130 | 2,488,083 | 65.64% | 854,953 | 8.06 req/s | 约 1.2 天 |
-| container-history | 1,475,499 | 2,488,083 | 59.30% | 1,012,584 | 6.94 req/s | 约 1.7 天 |
-
-运行参数及资源：
-
-- 每批认领 500 个箱号，每次必须使用 `offset=0`；完成后待处理集合会收缩，递增 offset 会跳过箱号；
-- 当前请求间隔为 `REQUEST_DELAY_MS=200-400`；
-- 2026-08-11 已对该间隔连续监控 30 分钟：VGM 完成 12,001 请求、history 完成 11,000 请求，新增错误、partial、failed、429 和 502 均为 0；
-- 当前约有 5 个 VGM 和 5 个 history 逻辑 worker，批次切换瞬间在 `crawl_run` 中可能只显示 4 个；
-- `npedi.sqlite` 约 95.42 GB，C 盘剩余约 263.93 GB，按当前增长速度足以完成本轮；
-- 数据库队列错误数为 0。8 月 10 日曾遇到一次集中 HTTP 502，失败认领已释放并在后续批次补采，未造成跳箱。
-
-实时查看进度，不会停止爬虫：
-
-```powershell
-& .\.venv\Scripts\python.exe scripts\backfill_progress.py --watch 300 --window-hours 0.5
+```
+token 失效：automatic login failed: getSms refused the request:
+此账号已被停用，请联系您公司管理员或咨询 0574-27681890
 ```
 
-查看 worker 和日志：
+### 两件事要分清楚
 
-```powershell
-Get-CimInstance Win32_Process |
-    Where-Object { $_.Name -match '^python(w)?\.exe$' -and $_.CommandLine -match 'run_enrichment_workers|npedi\.py crawl (vgm|container-history)' } |
-    Select-Object ProcessId, CreationDate, CommandLine
+**一、自动登录从来没有成功过一次。** `auth_token_event` 里 `refresh_detected`
+事件数为 **0**。08-18 那三次"恢复"全部是人工把新 token 贴进 `.env`
+（10:28、13:27、16:07 三次，`.env` 的 mtime 和 `manual_login2.log` 里的
+`LOGIN OK fingerprint: 429dd472…` 都能对上）。脚本里的 `AUTO_LOGIN` 是
+`run_gate_history_backfill.ps1:63` 用进程环境变量临时打开的，`.env` 里始终是
+`false`，进程一退出就失效——所以现在直接跑 `sync.py` 也不会自动重试登录。
 
-Get-Content .\logs\vgm_worker.out.log -Tail 20
-Get-Content .\logs\vgm_worker2.out.log -Tail 20
-Get-Content .\logs\history_workers.out.log -Tail 20
+**二、真正在恶化的是会话寿命，不是账号被永久封。** `auth_token_observation`
+记录的每个 token 实测存活：
+
+| token 指纹 | 首次成功 | 最后成功 | 存活 | 期间请求数 |
+| --- | --- | --- | ---: | ---: |
+| `60dd1f39` | 08-13 17:40 | 08-16 21:44 | 3 天 4 小时 | 1,141,295 |
+| `b7c4dd37` | 08-17 10:49 | 08-18 00:58 | 14 小时 | 251,681 |
+| `429dd472` | 08-18 10:28 | 08-18 11:42 | 1 小时 14 分 | 41,953 |
+| `9b1f3129` | 08-18 13:27 | 08-18 15:08 | 1 小时 41 分 | 56,954 |
+| `6d861041` | 08-18 16:07 | 08-18 19:29 | 3 小时 21 分 | 59,930 |
+
+第一个 token 撑了 114 万次请求 / 3 天；08-18 的三个平均只撑到 4–6 万次请求就被
+判失效。**服务端现在按请求量掐会话，阈值大约 4–6 万次**，6 workers 跑下来就是
+1–3.5 小时一断。
+
+同时 `/user/getSms` 一直返回"此账号已被停用"，所以脚本没法自己续。
+但 08-18 10:27 的**人工登录是成功的**（`manual_login2.log` 有 `LOGIN OK`），
+说明账号本身还能登，被挡住的是脚本走的那条发短信路径。
+
+### 怎么恢复
+
+先手工换 token，别急着打客服电话：
+
+1. 在有登录态的机器打开 <https://www.npedi.com/onesite/>
+2. F12 → Application → Cookies → `www.npedi.com`，复制 `Web-Token`
+   （或在 Network 里任取一个 `/onesite-api/` 请求，复制 `ediAuthorization` 里
+   `Bearer ` 之后的部分）
+3. 贴到 `.env` 的 `WEB_TOKEN=`
+4. `python sync.py gate-status` 验证，成功后 `ALERT_TOKEN_EXPIRED` 会自动删掉
+
+只有当**网页端登录本身**也提示账号停用时，才需要联系管理员或 0574-27681890。
+
+按现在 4–6 万请求就断一次的节奏，剩下的 8.5 万个候选中途还要断十几次，
+每次都得人工。要么接受这个节奏分多天跑，要么先想办法把自动登录修通。
+
+## 回填进度
+
+### CODECO 历史候选（主线）
+
+候选总数 474,018，已探测 388,520（**82.0%**），剩 85,498 待探测。
+
+| 状态 | 数量 | 含义 |
+| --- | ---: | --- |
+| `complete` | 211,559 | 全部页已入库 |
+| `empty` | 176,956 | 精确查询下接口返回 0 行（是事实，不是失败） |
+| `pending` | 85,498 | 还没点查 |
+| `hit` | 5 | 见下 |
+
+5 个 `hit` 里有 2 个是 `UN7654321`（中转梅山聚合桶，gatein_total 分别是 98,000 和
+1,633,402），已经在 `gate_history_rejected_pair` 里被侧车正确隔离，队列不会再碰，
+只是 candidate 表的状态字段没回写。**真正要续的是另外 3 个 2021 年的航次**，
+它们在 19:34–19:35 被 token 失效掐断：
+
+| 船码 | 航次 | ETA | 已入 IN | 已入 OUT |
+| --- | --- | --- | ---: | ---: |
+| `CN3104194` | 21047S | 2021-07-01 | 174 | 184 |
+| `UN9437567` | JK227N | 2021-07-02 | 0 | 1,102 |
+| `UN9168855` | W0519 | 2021-07-02 | 1,193 | 526 |
+
+按 `last_eta` 从新往旧探测，2022 及以后都已收尾，现在停在 2021 年 7 月初：
+
+| ETA 年份 | 待探测 | 候选总数 | 完成度 |
+| --- | ---: | ---: | ---: |
+| 2026 | 26 | 42,313 | 99.9% |
+| 2025 | 83 | 81,277 | 99.9% |
+| 2024 | 50 | 72,133 | 99.9% |
+| 2023 | 51 | 85,006 | 99.9% |
+| 2022 | 45 | 78,119 | 99.9% |
+| 2021 | 27,418 | 57,345 | 52.2% |
+| 2020 | 57,825 | 57,825 | 0% |
+| 合计 | **85,498** | 474,018 | 82.0% |
+
+最后一段用 6 workers、每 worker 间隔 1000–1250 ms，实测 **约 4,900 候选/小时**
+（08-18 17:00 和 18:00 两个完整小时分别是 4,999 和 4,832）。照这个速率剩余
+85,498 个需要 **约 17.4 小时净运行时长**。这是净时长，不含换 token 的停摆；
+按 08-18 的中断频率，墙钟时间要按两三天估。
+
+### 远程增强：已完成
+
+| 任务 | complete | pending | error |
+| --- | ---: | ---: | ---: |
+| VGM | 2,488,083 | 0 | 0 |
+| container-history | 2,488,083 | 0 | 0 |
+
+另有 264 个箱号过不了 ISO 6346 校验，保留审计，不发远端。
+这个 100% 的分母是**已采集 gate 目录衍生出的箱号集**，不是全港箱号全集。
+
+## 08-13 之后做完了什么
+
+### CODECO 历史回填从小批探测变成了主线工程
+
+交接文档上一版还在说"2026-06 单月、4 workers、12,346 个 pending"。之后可信窗口
+一路扩到 2023-01 ~ 2026-06 全量，跑完又往前补 2022、2020–2022。数据量级的变化：
+
+| | 08-13 | 现在 |
+| --- | ---: | ---: |
+| `gate_voyages` | 14,318 | **225,877** |
+| `gate_events` | 3,660,438 | **96,258,674** |
+| 候选队列 | 12,346 pending | 474,018 总量 / 85,498 pending |
+
+这一条把"只覆盖 2026-07-29/30 `vesselList` 快照目录"的老限制基本解掉了——
+但 2020–2021 还没跑完，跨年比较仍然不安全，见下面「已知限制」。
+
+### 异常报文侧车已经完整跑完
+
+`gate_anomaly_sidecar.py` 把虚拟船、运营聚合桶这类报文单独存进
+`gate_anomaly_sidecar.sqlite`，不混进物理船的 `gate_events`。当前状态：
+
+```
+候选 358 ｜ job complete 716 / error 0 / pending 0 ｜ 页 18,226 ｜ 行 1,753,609 ｜ 3.5 GiB
 ```
 
-## 已经完成的工作
+隔离表 `gate_history_rejected_pair` 共 3,555 条，其中占位船码 3,016、
+运营聚合桶 352、非法航次号 181。这些键**不会发给远端**——服务端如果忽略非法过滤条件，
+返回行会被错误归到占位船码上，那比少采更糟。
 
-### 数据覆盖和采集可靠性
+### 新增的运维件
 
-- 已从完整 `gate_events` 建立箱号目录，不再使用只有 53 个箱号的旧增强队列；目录共有约 248.84 万个箱号，其中 2,488,083 个通过 ISO 6346 校验并进入远程增强。
-- container-history CLI 已支持 `--limit`、`--offset` 和 claim，不再只处理队列前 500 个箱号。
-- VGM 与 container-history 分别维护 pending/claimed/complete/error 状态；并发 worker 认领互斥，中断后认领可回收，重复运行幂等。
-- worker 单批失败不再立即杀死整组；只有连续失败达到阈值才停止，避免单次服务端抖动长期损失并发。
-- SQLite 使用 WAL、`synchronous=NORMAL`，并把原先约每箱 26 次提交收敛到请求边界一次提交，解决多 worker 写锁瓶颈。
-- HTTP 429/5xx 的退避重试已写入日志，限流和服务端抖动不再不可观测。
-- 已完成 CODECO 闸口历史回填，当前 `gate_events` 约 365.97 万条；闸口事件按报文类型判断 IN/OUT，并按箱号、日期、方向去重。
+- `run_gate_history_backfill.ps1`：分 chunk 跑、断点保留、遇 401 有限次重启。
+- `scripts/history_backfill_watchdog.py`：回填异常时发邮件告警，08-18 四次中断都
+  正常告警了（事件 ID 可在各 `logs/history_backfill_watchdog_*.err.log` 里查）。
+- `scripts/gate_anomaly_watchdog.py`：盯侧车 supervisor。
+- 两个 Streamlit 面板，见 [DASHBOARD.md](DASHBOARD.md)。
+- `migrations/010`：`auth_token_observation` / `auth_token_event`，只存 token 的
+  SHA-256 指纹，不存 token 本身。上面那张会话寿命表就是靠它才能算出来。
 
-### 可回测的数据模型
+## 接下来按这个顺序
 
-- vessel plan 保存不可变快照；VGM、cargo release、transshipment 和 container history 使用 append-only `fact_record_version` 保存观测版本。
-- `aggregate`、`build-curves`、`cluster` 和 `render` 均支持 `--as-of`，只读取截止时间之前已经被系统观察到的版本，避免未来数据泄漏。
-- 聚类支持模型版本隔离和时间截面回放，可用于 point-in-time 回测。
-- 已有本地可复现性基线和验证脚本草稿，但尚未提交，见下方“未提交文件”。
-
-### 曲线与业务口径
-
-- 已修正“全港闸口箱流量”的含义：它表示已采集 CODECO 接口覆盖，不冒充官方全港吞吐量。
-- 闸口聚合严格按报文 `type` 判断方向；`GATE_OUT` 即使携带历史入闸时间也不会合成第二次入闸。
-- 20/40/45 英尺箱按 1/2/2.25 TEU 转换，并在图表中明确标注口径。
-- cargo-release 的 `cargovolum` 已明确为件数；`grossweight` 按版本化规则标准化为 kg，同时保留原始值、标准化值、单位和规则版本。主业务量仍使用放行提单数，重量单独展示。
-- `rebuild_meaningful_dashboard.ps1` 会重建 Gold、周曲线并输出 `export/npedi_port_dashboard.html`。
-
-### 自动登录
-
-- 自动登录已切换到当前 portal-api 合约，并在发送短信前先通过图片验证码，避免错误识别时反复触发短信。
-- 图片验证码模型使用 354 张人工标注图片训练；固定留出集单字符准确率 86.97%，整张四位验证码准确率 57.75%。登录会刷新图片重试，不能假设一次必定识别成功。
-- 短信验证码读取已接入 temp-mail Address JWT，只读轮询目标收件箱，并按收件人、发件人、NPEDI 正文标记和时间过滤。
-- `scripts/check_auto_login.py` 当前所有离线检查均通过，`AUTO_LOGIN` 已开启；手机号、JWT、邮箱地址、验证码和 token 仅保存在被 Git 忽略的本地配置中。
-- 尚需在合适时机执行一次真实短信端到端测试，确认“图片验证码 → 发短信 → temp-mail 收码 → 换取新 token”完整链路。该测试会真实发送短信，不应在回填正常运行时随意触发。
-
-## 还需要做什么，以及顺序
-
-### 1. 等远程增强完成
-
-预计截至 2026-08-11 14:46 还需约 1.7 天。只要进度持续增长且 errors 为 0，不要重启或重复启动更多 worker。不要再缩短 `200-400 ms`；当前瓶颈主要是服务端响应，再加压收益有限且可能重新触发 502。
-
-如果电脑重启或所有 worker 消失，可在四个 PowerShell 终端恢复到已验证过的约 5+5 并发：
+### 1. 换 token，恢复回填
 
 ```powershell
-# 终端 1
-& .\.venv\Scripts\python.exe scripts\run_enrichment_workers.py vgm --workers 4 --batch-size 500
-
-# 终端 2
-& .\.venv\Scripts\python.exe scripts\run_enrichment_workers.py vgm --workers 1 --batch-size 500
-
-# 终端 3
-& .\.venv\Scripts\python.exe scripts\run_enrichment_workers.py history --workers 4 --batch-size 500
-
-# 终端 4
-& .\.venv\Scripts\python.exe scripts\run_enrichment_workers.py history --workers 1 --batch-size 500
+# 换完 .env 里的 WEB_TOKEN 之后
+powershell -ExecutionPolicy Bypass -File .\run_gate_history_backfill.ps1 `
+  -EtaStart 2020-01-01 -EtaEnd 2022-12-31
 ```
 
-这些命令始终从未完成集合认领，不会从头重跑已完成箱号。
+断点已存，不会重扫已完成的部分。3 个半成品航次会被优先续完。
+只起一个 CLI 进程，6 workers 由它内部调度，**不要在后台叠多个 CLI**。
 
-### 2. 验收全量覆盖
+### 2. 跑完 2021 和 2020
 
-两个 worker 组都输出 `All available ... rows finished` 后运行：
+净时长约 17.4 小时，但要按多次中断规划。跑完之后查一次：
 
 ```powershell
-& .\.venv\Scripts\python.exe npedi.py coverage-status
-& .\.venv\Scripts\python.exe scripts\backfill_progress.py
+python sync.py gate-status
 ```
 
-验收标准：VGM 和 container-history 均为 `2,488,083/2,488,083`，remaining=0，errors=0，claims=0。若只剩 error，不要直接把它们标记 complete；查看 `ingest_error`，修复原因后重新运行 worker。
+### 3. 重建 gate 聚合
 
-### 3. 重建分析产物
-
-远程采集完成后再运行，避免与 95 GB 主库争用 I/O：
+**`agg_gate_daily` 现在还是 2,744 行、只覆盖 2021-04-16 ~ 2026-07-30，大回填之后
+从来没重建过。** 9,625 万条 CODECO 事件对应 2,744 行日聚合，面板上那条曲线是失真的，
+演示前必须先重跑：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\rebuild_meaningful_dashboard.ps1
-& .\.venv\Scripts\python.exe npedi.py quality-report
 ```
 
-这一步会依次执行 Gold 聚合、周曲线和 HTML 渲染。首次基于完整数据运行尚无可靠耗时基准，应预留数小时；不要在没有证据时宣称已经完成。
+主库 168 GiB，这一步要预留数小时，别和采集抢 I/O。
 
-需要回测时必须指定同一个 `--as-of`：
+### 4. 代码已提交（2026-08-19）
 
-```powershell
-& .\.venv\Scripts\python.exe npedi.py aggregate --as-of 2026-08-01T23:59:59+00:00
-& .\.venv\Scripts\python.exe npedi.py build-curves --granularity week --as-of 2026-08-01T23:59:59+00:00
-& .\.venv\Scripts\python.exe npedi.py cluster --entity terminal --curve-type vgm --algorithm hierarchical --as-of 2026-08-01T23:59:59+00:00
-& .\.venv\Scripts\python.exe npedi.py render --granularity week --as-of 2026-08-01T23:59:59+00:00
-```
+08-13 之后六天的活分两个提交推上了 `main`：`e092ec4`（CODECO 全量补爬 + 异常报文
+侧车 + 两个面板 + 文档）、`f375803`（回填包装脚本 + 断连 watchdog）。
+提交前顺带修了三个真问题：
 
-### 4. 验证自动登录
+- `dashboard.py` 原来是**可写**连接（`sqlite3.connect(r"npedi.sqlite")`），
+  没有 `mode=ro`、没有 `query_only`，而运维面板的"数据查询"页签是个自由 SQL
+  输入框——对着 168 GiB 主库，谁在那儿敲一句 `DELETE` 就真的执行了。
+  改成和 `report_dashboard.py` 一样的 `mode=ro` + `PRAGMA query_only=ON`，
+  验证过 DELETE/DROP/CREATE 全部被 SQLite 自己挡下。
+- `run_dashboard.sh` 写的端口是 8080，和 `run_report_dashboard.ps1` 撞车；
+  改成和 Windows 版一致的 8081。
+- `history_backfill_watchdog.py` 和 `run_gate_history_backfill.ps1` 把告警邮箱
+  硬编码成了个人 Gmail 地址。改成读 `NPEDI_ALERT_EMAIL`（环境变量优先，
+  其次 `.env`，未配置时启动即报错，不会静默发到错误邮箱）；
+  ps1 那边原来无论有没有配都会显式传 `--to ''` 把 Python 自己的兜底覆盖掉，
+  一并修了。要用告警就在 `.env` 里配一行 `NPEDI_ALERT_EMAIL=`。
+- `.gitignore` 补了 `*.db`（`npedi.db`/`store.db` 那类 0 字节误建文件）和
+  `.sync.gate.sidecar.lock`（文件名和原来写的对不上，没被排除）。
 
-先做无副作用的离线检查：
+提交前跑过 68 个测试全过，且确认 `.env`、`*.sqlite`、日志、验证码样本都没有
+被带进 git（`git check-ignore` 逐个核对过）。
+
+### 5. 有空再修自动登录
+
+现在这条路径 100% 失败。修通之前，每次会话失效都要人守着。
+离线检查（无副作用）：
 
 ```powershell
 & .\.venv\Scripts\python.exe scripts\check_auto_login.py
 ```
 
-只有在允许真实发送一条短信时再执行：
-
-```powershell
-& .\.venv\Scripts\python.exe scripts\test_auto_login.py --request-sms
-```
-
-若真实测试失败，保持现有 Web-Token，不要反复请求短信；按 `docs/auto-login.md` 分别测试 CAPTCHA 推理和 temp-mail 读取。
+真实短信测试会实际发一条短信，别在回填正常跑的时候触发。
 
 ## 已知限制
 
-- VGM 与 container-history 官方接口只支持按单箱可靠过滤；全覆盖必须各发约 248.8 万个请求，没有可用的批量参数。
-- cargo-release 在线接口会忽略已测试的船名/航次过滤条件，因此不能声称已完成可信的全港 cargo-release 全量回填。现有历史记录可用于其已观测范围内的分析和回测。
-- point-in-time 回测保证“当时已经采集到什么就只能看到什么”，不保证系统在早期截止时刻已经回填完现实世界中此前发生的全部事件。晚采集到的旧事件不会泄漏进较早 cutoff。
-- CAPTCHA 当前整图准确率为 57.75%，可靠性依赖刷新图片重试；增加人工标注样本并重新做固定留出集评估，仍是提升自动登录稳定性的主要路径。
-- `npedi.sqlite`、`.env`、验证码样本、模型权重和运行日志均属于本地状态，不应提交 Git。
+- **2020–2021 还没跑完，CODECO 跨年趋势仍然不可比。** 2022 及以后完成度 99.9%，
+  2021 只有 52.2%，2020 是 0。现在画跨年曲线，2020–2021 的低值是没采到，
+  不是业务量低。
+- **`empty` 不等于失败。** 17.7 万个 `empty` 是"接口在精确的船×航次×方向查询下
+  确实返回 0 行"，是关于世界的事实。报告里不要说成采集失败。
+- **VGM / container-history 的 100% 只针对已采集 gate 目录衍生的箱号集**，
+  不能外推成全港或全历史覆盖率。两个接口都只能按单箱查，248.8 万箱各要 248.8 万次
+  请求，没有批量参数。
+- **cargo-release 的在线接口会忽略船名/航次过滤**，所以不能声称完成了可信的全量回填。
+  现有记录只在其已观测范围内可用。
+- **可回溯的时间下界是 2026-08-04**，`fact_record_version.observed_at` 的实测最早值。
+  在此之前只有当前投影，没有"当时看到的样子"，as-of 重建不了 7 月的视图。
+- **聚类当前是退化的**（silhouette = 0.0，18 个实体里 12 个特征全零），根因是周曲线
+  被 71% 的零填充桶稀释。细节和四步修法见
+  [docs/report_brief.md](docs/report_brief.md) §3，别把现在的聚类结果当成果展示。
+- **CAPTCHA 整图准确率 57.75%**（354 张标注样本训练，固定留出集），依赖刷新重试。
+- `npedi.sqlite`（168 GiB）、`gate_anomaly_sidecar.sqlite`（3.5 GiB）、`.env`、
+  模型权重、验证码样本、日志都是本地状态，不进 Git。
 
-## 仓库和未提交文件
+## 常用命令
 
-- 本文创建前，`main` 与 `origin/main` 同步在提交 `ae9b12a`。
-- `docs/reproducibility/baseline-20260810T045302Z.json` 与 `scripts/verify_reproducible.py` 是已有的未跟踪实验文件，不属于本 handover 提交范围；其中脚本的部分注释存在编码异常，需审查、修复和验证后再单独提交。
-- 推送前应确认 `.env`、数据库、WAL、模型、样本和日志仍被 `.gitignore` 排除。
+```powershell
+# 队列进度，不会停爬虫
+& .\.venv\Scripts\python.exe scripts\backfill_progress.py --watch 300 --window-hours 0.5
 
+# CODECO 回填状态
+python sync.py gate-status
+
+# 侧车状态
+& .\.venv\Scripts\python.exe .\gate_anomaly_sidecar.py status --json
+
+# 看有没有爬虫在跑
+Get-CimInstance Win32_Process |
+    Where-Object { $_.Name -match '^python(w)?\.exe$' } |
+    Select-Object ProcessId, CreationDate, CommandLine
+
+# 日志
+Get-Content .\logs\gate_history_backfill_wrapper.log -Tail 30
+Get-Content .\logs\sync.log -Tail 40
+```
+
+`coverage-status` 会扫大体量 gate 事实表，要跑几分钟；只想看队列就用
+`scripts/backfill_progress.py`。
